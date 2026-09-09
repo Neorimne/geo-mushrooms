@@ -10,3 +10,10 @@ docker-compose.yml
 docker-compose.prod.yml
 Dockerfile
 README.md
+
+# The extraction plan this repository was built from. It carries the private
+# project's production domain, IP and root SSH line, so it is never committed —
+# and never sent to Docker either, since the Dockerfile builds with `COPY . .`
+# and a gitignored file still lands in the builder image layer.
+# Only this file is excluded; docs/images/ holds the tracked README screenshots.
+docs/SHOWCASE-AUDIT.md
