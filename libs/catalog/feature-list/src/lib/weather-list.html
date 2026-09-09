@@ -1,0 +1,210 @@
+<div class="h-screen flex flex-col bg-gray-50 dark:bg-slate-900 transition-colors duration-300 overflow-hidden">
+  <!-- Header -->
+  <lib-weather-list-header></lib-weather-list-header>
+
+  <!-- Content -->
+  <main class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 custom-scrollbar">
+    <div class="max-w-7xl mx-auto space-y-12">
+
+      @if (store.error()) {
+      <div class="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800">
+        {{ store.error() }}
+      </div>
+      }
+
+      <!-- Level 1: areas -->
+      @for (area of store.groupedByArea(); track area.areaId) {
+      <section class="animate-in fade-in slide-in-from-bottom-4 duration-500">
+
+        <!-- Area heading -->
+        <div class="w-full flex items-center gap-2 border-b border-slate-200 dark:border-slate-700 pb-2 mb-6 group">
+
+          <!-- Collapse toggle (takes all left space) -->
+          <button (click)="layoutService.toggleArea(area.name)"
+            class="flex flex-1 items-center gap-3 text-left min-w-0 hover:opacity-80 transition-opacity">
+            <h2 class="text-3xl font-extrabold text-slate-800 dark:text-slate-100">
+              {{ area.name }}
+            </h2>
+            <span class="shrink-0 px-3 py-1 bg-slate-200 dark:bg-slate-700 text-xs font-bold rounded-full text-slate-600 dark:text-slate-300">
+              {{ citiesLabel(area.cities.length) }}
+            </span>
+          </button>
+
+          <!-- Right: collect region (auth-gated) + chevron -->
+          <div class="flex items-center gap-1 shrink-0">
+            @if (authStore.isAuthenticated()) {
+              <button (click)="requestScrapeRegion(area.areaId, area.name, area.cities.length)"
+                [disabled]="store.activeRun()"
+                class="p-1.5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors disabled:opacity-40 disabled:hover:text-slate-400 disabled:hover:bg-transparent"
+                title="Collect data for this region">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              </button>
+            }
+            @if (authStore.isAuthenticated() && store.devToolsEnabled()) {
+              <button (click)="requestDeleteRegion(area.areaId, area.name)"
+                class="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                title="DEV: delete the newest collected day for this region">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            }
+            <button (click)="layoutService.toggleArea(area.name)"
+              class="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+              <svg class="w-6 h-6 transition-all duration-300"
+                [class.rotate-180]="!layoutService.isExpanded(area.name)"
+                fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 15l7-7 7 7" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        @if (layoutService.isExpanded(area.name)) {
+        <!-- Level 2: cities inside the area. One card each — the history lives
+             behind it, on the city's own page. -->
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+          @for (city of area.cities; track city.city.id) {
+
+          <div class="flex flex-col gap-2">
+            <!-- City name + per-city actions -->
+            <div class="flex items-center gap-2 pl-1">
+              <h3 class="text-lg font-bold text-slate-500 dark:text-slate-400 flex items-center gap-2 min-w-0">
+                <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                </svg>
+                <span class="truncate">{{ city.city.name }}</span>
+              </h3>
+              @if (authStore.isAuthenticated()) {
+                <button (click)="requestScrapeCity(city.city.id, city.city.name)"
+                  [disabled]="store.activeRun()"
+                  class="p-1 rounded-sm text-slate-300 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors disabled:opacity-40 disabled:hover:text-slate-300 disabled:hover:bg-transparent"
+                  title="Collect data for this city">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                </button>
+              }
+              @if (authStore.isAuthenticated() && store.devToolsEnabled()) {
+                <button (click)="requestDeleteCity(city.city.id, city.city.name)"
+                  class="p-1 rounded-sm text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                  title="DEV: delete this city&#39;s newest collected day">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              }
+            </div>
+
+            <lib-city-summary-card [summary]="city"
+              (opened)="openCity(city.city.id)"></lib-city-summary-card>
+          </div>
+
+          }
+        </div>
+        }
+
+      </section>
+      } @empty {
+      <div class="flex flex-col items-center justify-center py-20 text-slate-400">
+        <p class="text-xl">No data yet 🍄</p>
+        <p class="text-sm">Add a city, or start a collection run</p>
+      </div>
+      }
+    </div>
+  </main>
+
+  <!-- Collect Confirmation Modal -->
+  @if (pendingScrape()) {
+  <div class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+    <div class="w-full max-w-sm bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl p-6 text-slate-800 dark:text-slate-100
+                animate-in fade-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 duration-200">
+
+      <!-- Icon + Title -->
+      <div class="flex items-start gap-4 mb-4">
+        <div class="shrink-0 flex items-center justify-center w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30">
+          <svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+          </svg>
+        </div>
+        <div>
+          <h3 class="font-bold text-base">Confirm data collection</h3>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+            @if (pendingScrape()!.type === 'city') {
+              The current month will be refreshed for <span class="font-semibold text-slate-700 dark:text-slate-200">{{ pendingScrape()!.name }}</span>. Days already stored are overwritten with the archive&#39;s current values.
+            } @else {
+              The current month will be refreshed for every city in <span class="font-semibold text-slate-700 dark:text-slate-200">{{ pendingScrape()!.name }}</span> ({{ citiesLabel(pendingScrape()!.cityCount ?? 0) }}).
+              <br />
+              Cities are collected one at a time, with pauses between them — progress appears in the header.
+            }
+          </p>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex gap-3 justify-end">
+        <button (click)="cancelScrape()"
+          class="px-4 py-2 text-sm font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700">
+          Cancel
+        </button>
+        <button (click)="confirmScrape()"
+          class="px-5 py-2 text-sm font-bold bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-colors flex items-center gap-2 shadow-md shadow-amber-500/20">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+          Collect
+        </button>
+      </div>
+    </div>
+  </div>
+  }
+
+  <!-- Delete (DEV) Confirmation Modal -->
+  @if (pendingDelete()) {
+  <div class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+    <div class="w-full max-w-sm bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl p-6 text-slate-800 dark:text-slate-100
+                animate-in fade-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 duration-200">
+
+      <!-- Icon + Title -->
+      <div class="flex items-start gap-4 mb-4">
+        <div class="shrink-0 flex items-center justify-center w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30">
+          <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        </div>
+        <div>
+          <h3 class="font-bold text-base">DEV: delete the newest collected day?</h3>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+            @if (pendingDelete()!.type === 'city') {
+              The newest day for <span class="font-semibold text-slate-700 dark:text-slate-200">{{ pendingDelete()!.name }}</span> will be deleted. The next collection run brings it back from the archive.
+            } @else {
+              The newest day of every city in <span class="font-semibold text-slate-700 dark:text-slate-200">{{ pendingDelete()!.name }}</span> will be deleted. The next collection run brings them back from the archive.
+            }
+          </p>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex gap-3 justify-end">
+        <button (click)="cancelDelete()"
+          class="px-4 py-2 text-sm font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700">
+          Cancel
+        </button>
+        <button (click)="confirmDelete()"
+          class="px-5 py-2 text-sm font-bold bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors flex items-center gap-2 shadow-md shadow-red-500/20">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+          Delete
+        </button>
+      </div>
+    </div>
+  </div>
+  }
+</div>
