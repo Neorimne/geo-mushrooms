@@ -1,0 +1,57 @@
+@import 'tailwindcss';
+
+/* Keep the existing JS config (darkMode: 'class' + Nx monorepo content globs). */
+@config '../tailwind.config.js';
+
+/* You can add global styles to this file, and also import other style files */
+
+@layer utilities {
+  /* === Webkit (Chrome, Edge, Safari) === */
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  /* Track — transparent, so it takes the page background */
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  /* The thumb itself */
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-300 rounded-full border-4 border-transparent bg-clip-content;
+    /* border-transparent + bg-clip-content inset the thumb from the edges */
+  }
+
+  /* Thumb on hover */
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-400;
+  }
+}
+
+.custom-scrollbar-horizontal::-webkit-scrollbar {
+  height: 8px; /* for horizontal scrollbars */
+}
+
+/* === Dark Mode === */
+/* Dark mode is class-based, so the colours switch under .dark */
+.dark {
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-600;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-500;
+  }
+}
+
+/* === Firefox, which has its own properties === */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent; /* light mode: slate-300 */
+}
+
+.dark * {
+  scrollbar-color: #475569 transparent; /* dark mode: slate-600 */
+}
