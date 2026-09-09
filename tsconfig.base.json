@@ -1,0 +1,35 @@
+{
+  "compileOnSave": false,
+  "compilerOptions": {
+    "rootDir": ".",
+    "sourceMap": true,
+    "declaration": false,
+    "moduleResolution": "node",
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "importHelpers": true,
+    "target": "es2022",
+    "module": "esnext",
+    "lib": ["es2022", "dom"],
+    "skipLibCheck": true,
+    "skipDefaultLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@geo/catalog/data-access": ["libs/catalog/data-access/src/index.ts"],
+      "@geo/catalog/ui-card": ["libs/catalog/ui-card/src/index.ts"],
+      "@geo/shared/ui-toast": ["libs/shared/ui-toast/src/index.ts"],
+      "@geo/catalog/feature-list": ["libs/catalog/feature-list/src/index.ts"],
+      "@geo/auth/data-access": ["libs/auth/data-access/src/index.ts"],
+      "@geo/auth/feature-login": ["libs/auth/feature-login/src/index.ts"],
+      "@geo/catalog/ui-chart": ["libs/catalog/ui-chart/src/index.ts"],
+      "@geo/catalog/feature-city-detail": [
+        "libs/catalog/feature-city-detail/src/index.ts"
+      ]
+    },
+    "noUncheckedSideEffectImports": false,
+    "types": ["*"],
+    "esModuleInterop": false,
+    "ignoreDeprecations": "6.0"
+  },
+  "exclude": ["node_modules", "tmp"]
+}

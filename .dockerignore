@@ -1,0 +1,12 @@
+node_modules
+dist
+tmp
+.git
+.nx
+.angular
+.vscode
+.idea
+docker-compose.yml
+docker-compose.prod.yml
+Dockerfile
+README.md

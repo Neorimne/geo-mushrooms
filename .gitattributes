@@ -1,0 +1,13 @@
+# Normalise line endings on the way in, and check out LF everywhere.
+#
+# Without this, a Windows checkout with core.autocrlf=true can commit CRLF into
+# a tree that is otherwise LF — which turns a three-line change into a whole-file
+# diff and destroys `git blame` for that file.
+* text=auto eol=lf
+
+# Binary assets must never be normalised.
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff binary
+*.woff2 binary
