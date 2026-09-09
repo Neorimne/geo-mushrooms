@@ -1,0 +1,158 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 0. User (authentication only)
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+
+  @@map("users")
+}
+
+// 1. Area — the grouping a city belongs to
+model Area {
+  id       Int     @id @default(autoincrement())
+  name     String  @unique // Area name (e.g. "Verdolo")
+  isActive Boolean @default(true)
+
+  cities City[] // One area holds many cities
+
+  createdAt DateTime @default(now())
+
+  @@map("areas")
+}
+
+// 2. City
+model City {
+  id Int @id @default(autoincrement())
+
+  // Link to the area
+  areaId Int
+  area   Area @relation(fields: [areaId], references: [id])
+
+  name     String // "Pietralta"
+  // Stable identifier for the city, unique and URL-safe. Also what an archive
+  // adapter maps to its own locality id.
+  slug     String  @unique // "pietralta"
+  isActive Boolean @default(true)
+
+  // The id the archive provider knows this city by, resolved once and cached.
+  // Kept out of the run's hot path on purpose: a provider may have to pay for
+  // the lookup (an HTTP round trip, a rate-limit budget), so a collection run
+  // must never depend on repeating it.
+  sourceLocalityId Int?
+
+  observations DailyObservation[]
+
+  createdAt DateTime @default(now())
+
+  @@map("cities")
+}
+
+// 3. One observed day for one city, as served by the source's daily archive.
+//
+// Every metric is nullable on purpose: a single unparsable field must never cost
+// us the whole day. `date` is the observed day, always built as
+// `new Date('YYYY-MM-DDT00:00:00.000Z')` and serialised back with
+// `toISOString().slice(0, 10)` — @db.Date keeps it free of timezone drift.
+// The archive covers up to D-3: the source withholds its last two days
+// while its meteorologists validate them.
+model DailyObservation {
+  id Int @id @default(autoincrement())
+
+  cityId Int
+  city   City @relation(fields: [cityId], references: [id], onDelete: Cascade)
+
+  date DateTime @db.Date
+
+  tMin       Float? // °C
+  tMax       Float? // °C
+  tPerceived Float? // "feels like", °C
+
+  // Precipitation arrives with its own unit: "mm" of rain, but "cm" on snow days.
+  // Both are stored as sent — collapsing them into one column would silently mix
+  // centimetres of snow into millimetres of rain.
+  precipAmount Float?
+  precipUnit   String? // "mm" | "cm"
+  precipProb   Int?    // %
+  precipType   String? // "p" = rain, "n" = snow, null when dry
+
+  // Wind speed is in knots, which is what daily archives tend to publish and
+  // rarely label. Stored verbatim, like every other source field, and converted
+  // at the point of display in windSpeedKmh() — converting on the way in would
+  // make the stored number disagree with the source it came from.
+  windDirection String? // 16-point compass ("SSW")
+  windSpeed     Float?  // knots
+  windGust      Float?  // knots — always windSpeed * 1.4, so never charted
+
+  humidity Int?   // daily mean, %
+  pressure Float? // hPa
+  uvIndex  Float?
+
+  zeroThermalM Int? // freezing level, m
+  snowLineM    Int? // snow line, m
+
+  conditionText String? // short description of the day ("light rain")
+  symbolId      Int? // the source's own icon id
+
+  fetchedAt DateTime @default(now()) @updatedAt
+
+  note Note?
+
+  @@unique([cityId, date])
+  @@map("daily_observations")
+}
+
+// 3.1 User note attached to an observed day (1-to-1).
+// Written by hand in the client while checking the data in the field.
+model Note {
+  id Int @id @default(autoincrement())
+
+  observationId Int              @unique // @unique makes this a 1-to-1
+  observation   DailyObservation @relation(fields: [observationId], references: [id], onDelete: Cascade)
+
+  text String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("notes")
+}
+
+// 5. One collection run — the unit of work the UI polls for progress.
+// A run covers all cities, one area, or a single city, depending on the trigger.
+//
+// The `*Cities`/`currentCity` names are legacy: a run's unit is a city on the
+// daily pass but a city-month on a backfill, so `totalCities` counts whatever
+// the run's plan is made of and `currentCity` may read "Pietralta — 2026-05".
+// Renaming them would churn the DTO, the client store and the e2e specs for
+// nothing, so the names stay and the meaning is documented here.
+model IngestionRun {
+  id Int @id @default(autoincrement())
+
+  trigger String // CRON | MANUAL_ALL | MANUAL_REGION | MANUAL_CITY | CITY_CREATED | MANUAL_BACKFILL
+  status  String // RUNNING | COMPLETED | FAILED
+
+  scopeLabel  String? // What the run covers, ready to show in the UI
+  totalCities Int // Units in the run's plan — cities, or city-months on a backfill
+  processed   Int     @default(0)
+  failed      Int     @default(0)
+  currentCity String? // Unit being worked on right now
+
+  errorMessage String? // Set only when the run itself dies; per-unit errors just bump `failed`
+
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  @@index([startedAt])
+  @@map("ingestion_runs")
+}
