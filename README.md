@@ -193,6 +193,12 @@ npx nx serve client                                       # http://localhost:420
 | Dependency graph | `npx nx graph` |
 | Reseed from scratch | `docker compose down -v && docker compose up -d` |
 
+The everyday ones are npm scripts too: `npm run lint`, `npm test`, `npm run build`,
+`npm run e2e`, `npm run serve:api`, `npm run serve:client`. On a fresh clone run
+`npm run prisma:generate` before the tests — the API specs import the generated Prisma
+client, and nothing generates it for you (a `postinstall` hook would break the Docker
+build, which installs before the schema is copied).
+
 ### Prisma (always pass `--schema`)
 
 ```sh

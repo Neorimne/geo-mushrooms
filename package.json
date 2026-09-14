@@ -1,8 +1,16 @@
 {
-  "name": "@geo-mushrooms-fe/source",
+  "name": "@geo-mushrooms/source",
   "version": "0.0.0",
   "license": "MIT",
-  "scripts": {},
+  "scripts": {
+    "lint": "nx run-many -t lint",
+    "test": "nx run-many -t test",
+    "build": "nx run-many -t build",
+    "e2e": "nx e2e client-e2e",
+    "serve:api": "nx serve api",
+    "serve:client": "nx serve client",
+    "prisma:generate": "prisma generate --schema=./apps/api/prisma/schema.prisma"
+  },
   "private": true,
   "devDependencies": {
     "@angular-devkit/core": "22.1.7",
