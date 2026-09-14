@@ -3,14 +3,14 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [master, develop]
+    branches: [master]
 
-# A new push supersedes the run still in flight for the same commit. Keyed on
-# the SHA rather than the ref because master is only ever fast-forwarded from
-# develop: the identical tree then arrives twice under two refs, and a ref-keyed
-# group verifies it twice over instead of superseding the first run.
+# A new push supersedes the run still in flight for the same branch or pull
+# request: that commit is already superseded, so verifying it is work nobody
+# will read. Keyed on the ref rather than the SHA — a second push carries a
+# second SHA, so a SHA-keyed group never matches the run it is meant to cancel.
 concurrency:
-  group: ci-${{ github.sha }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -21,13 +21,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Node 20 to match the Dockerfile's builder stage.
+      # Node 22 to match the Dockerfile's builder stage.
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
 
-      # package-lock.json is an npm 11 artifact, and npm 10 (what Node 20 ships)
+      # package-lock.json is an npm 11 artifact, and npm 10 (what Node 22 ships)
       # builds a different tree from it — `npm ci` then rejects the lockfile as
       # out of sync. The Dockerfile pins npm 11 for the same reason; keep CI,
       # the image build and local dev on one npm.
