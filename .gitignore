@@ -136,3 +136,8 @@ cheat-sheet.md
 # and a gitignored file still lands in the builder image layer.
 # Only this file is excluded; docs/images/ holds the tracked README screenshots.
 docs/SHOWCASE-AUDIT.md
+
+# The active development plan. It lists every known weakness in this codebase and
+# discusses how the repository reads to a reviewer, so it stays private until the
+# fixes land — and, like the audit above, out of the builder image too.
+docs/plan.md
