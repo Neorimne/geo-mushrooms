@@ -114,10 +114,6 @@ describe('WeatherListComponent', () => {
     jest.useRealTimers();
   });
 
-  it('should create', () => {
-    expect(component).toBeTruthy();
-  });
-
   it('renders one card per city', () => {
     apiService.getSummaries.mockReturnValue(of([SUMMARY]));
     fixture.detectChanges();

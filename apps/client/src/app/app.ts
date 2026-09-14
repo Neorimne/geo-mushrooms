@@ -13,5 +13,7 @@ import { ToastComponent } from '@geo/shared/ui-toast';
   styles: [],
 })
 export class AppComponent {
+  // Never read: constructing ThemeService is what applies the stored theme to
+  // <html>. Deleting this field silently drops dark mode on first paint.
   private readonly themeService = inject(ThemeService);
 }

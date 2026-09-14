@@ -30,10 +30,6 @@ describe('LoginComponent', () => {
     fixture.detectChanges();
   });
 
-  it('should create', () => {
-    expect(component).toBeTruthy();
-  });
-
   it('should have invalid form when empty', () => {
     expect(component['form'].invalid).toBe(true);
   });
