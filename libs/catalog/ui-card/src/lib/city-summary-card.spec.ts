@@ -135,7 +135,8 @@ describe('CitySummaryCardComponent', () => {
   });
 
   it('labels precipitation with the unit the source actually sent', () => {
-    // A snow day arrives in centimetres; the card says so, in Russian.
+    // A snow day arrives in centimetres; the card says so rather than
+    // relabelling it mm.
     render(summary([observation('2026-01-07', { precipUnit: 'cm', precipType: 'n' })]));
 
     expect(component.precipUnit()).toBe('cm');

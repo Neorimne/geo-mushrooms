@@ -39,7 +39,7 @@ test('authenticated user reaches the list, filters it, and opens a city chart', 
 
   await page.goto('/');
 
-  // Past the auth guard the list header renders its Russian title.
+  // Past the auth guard the list header renders its title.
   await expect(page.locator('h1')).toContainText('Overview');
 
   // Only the area filter is left: days are no longer picked from a dropdown of

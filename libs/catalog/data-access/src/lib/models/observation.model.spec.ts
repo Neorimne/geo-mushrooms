@@ -49,7 +49,7 @@ function summary(latest: Observation | null): CitySummary {
 
 describe('observation model', () => {
   describe('precipUnitLabel', () => {
-    it('prints the source units in Russian', () => {
+    it('prints the source units', () => {
       expect(precipUnitLabel('mm')).toBe('mm');
       expect(precipUnitLabel('cm')).toBe('cm');
     });

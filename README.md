@@ -209,7 +209,7 @@ npx prisma studio --schema=./apps/api/prisma/schema.prisma
 ### CI
 
 `.github/workflows/ci.yml` runs `nx run-many -t lint test build` plus the Playwright suite
-on every pull request and on pushes to `master` / `develop`. The E2E suite is hermetic —
+on every pull request and on every push to `master`. The E2E suite is hermetic —
 route interception stands in for the API — so CI needs no database and no backend.
 
 `apps/api-e2e` is the exception: it smoke-tests a *running* stack, so it is run locally

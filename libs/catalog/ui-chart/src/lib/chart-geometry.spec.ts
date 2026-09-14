@@ -321,7 +321,7 @@ describe('chart-geometry', () => {
   });
 
   describe('formatDayLabel', () => {
-    it('renders a short Russian date', () => {
+    it('renders a short date', () => {
       expect(formatDayLabel('2026-08-19')).toBe('19 Aug');
       expect(formatDayLabel('2026-04-01')).toBe('1 Apr');
     });
