@@ -13,7 +13,7 @@ import { pipe, switchMap } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import { tapResponse } from '@ngrx/operators';
 import { Router } from '@angular/router';
-import { API_URL } from '@geo/catalog/data-access';
+import { API_URL } from '@geo/shared/util-config';
 
 const TOKEN_KEY = 'auth_token';
 

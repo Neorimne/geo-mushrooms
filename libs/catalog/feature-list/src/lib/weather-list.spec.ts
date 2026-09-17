@@ -3,7 +3,8 @@ import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter, Router } from '@angular/router';
 import { of } from 'rxjs';
-import { API_URL, WeatherApiService } from '@geo/catalog/data-access';
+import { WeatherApiService } from '@geo/catalog/data-access';
+import { API_URL } from '@geo/shared/util-config';
 import {
   CitySummary,
   IngestionRun,
