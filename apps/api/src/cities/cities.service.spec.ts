@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { CitiesService } from './cities.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AreasService } from '../areas/areas.service';
@@ -78,6 +79,37 @@ describe('CitiesService', () => {
       await expect(
         service.create({ name: 'Pietralta', slug: 'pietralta', areaId: 1 }),
       ).rejects.toThrow('City with this slug already exists');
+    });
+
+    // The pre-flight check and the insert are two statements, so two requests
+    // for one slug can both pass the check. City.slug is unique, so the database
+    // rejects the loser — and that used to surface as an unhandled P2002, a 500
+    // for exactly the condition the checked path calls a bad request.
+    it('rejects a slug that was taken between the check and the insert', async () => {
+      prismaService.city.findUnique.mockResolvedValue(null);
+      archiveClient.resolveLocality.mockResolvedValue(2087);
+      areasService.findById.mockResolvedValue({ id: 1, name: 'Verdolo' });
+      prismaService.city.create.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError(
+          'Unique constraint failed on the fields: (`slug`)',
+          { code: 'P2002', clientVersion: 'test', meta: { target: ['slug'] } },
+        ),
+      );
+
+      await expect(
+        service.create({ name: 'Pietralta', slug: 'pietralta', areaId: 1 }),
+      ).rejects.toThrow('City with this slug already exists');
+    });
+
+    it('lets an unrelated database error through unchanged', async () => {
+      prismaService.city.findUnique.mockResolvedValue(null);
+      archiveClient.resolveLocality.mockResolvedValue(2087);
+      areasService.findById.mockResolvedValue({ id: 1, name: 'Verdolo' });
+      prismaService.city.create.mockRejectedValue(new Error('connection lost'));
+
+      await expect(
+        service.create({ name: 'Pietralta', slug: 'pietralta', areaId: 1 }),
+      ).rejects.toThrow('connection lost');
     });
 
     it('rejects a slug the source does not know', async () => {
