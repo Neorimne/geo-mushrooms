@@ -153,6 +153,20 @@ model IngestionRun {
   startedAt  DateTime  @default(now())
   finishedAt DateTime?
 
+  // Who is collecting for this run, and when they last said so. The process
+  // that starts a run stamps its own id and refreshes `heartbeatAt` while the
+  // loop is alive, so a restart can tell a run whose process died from one
+  // another instance is still working on. See RUN_LEASE_MS.
+  ownerId     String?
+  heartbeatAt DateTime?
+
   @@index([startedAt])
   @@map("ingestion_runs")
+
+  // One more index exists that is not written here: a UNIQUE index on `status`
+  // WHERE status = 'RUNNING', added in 20260917100000_ingestion_run_single_flight.
+  // It is what enforces "only one run at a time" -- the service used to check
+  // for an active run and then create one, which two callers could interleave.
+  // Prisma has no syntax for a partial index on PostgreSQL, so it lives in SQL
+  // only; it is not representable here, so migrate never diffs it away.
 }

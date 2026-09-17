@@ -148,8 +148,24 @@ the client, the seam is being bypassed.
 - **`IngestionService`** — cron plus manual triggers. Plans a run as city-months and
   upserts every returned day on `(cityId, date)`. Holds no knowledge of any source.
 - **Collection runs** — every trigger records an `IngestionRun` and updates counters unit
-  by unit. Only one may be `RUNNING` (`409` otherwise); rows left `RUNNING` by a crashed
-  process are closed on startup.
+  by unit. Only one may be `RUNNING` (`409` otherwise), and that is a **partial unique
+  index** — `UNIQUE (status) WHERE status = 'RUNNING'`, in
+  `20260917100000_ingestion_run_single_flight` — not a check in the service. Prisma cannot
+  express a partial index, so it is hand-written SQL and `schema.prisma` points at it;
+  `migrate` never diffs it away because it cannot see it. Creating the run **is** taking
+  the lock: `beginRun` inserts and maps `P2002` to the 409. Do not reintroduce a
+  "is anything running?" read before it — that was the bug, and the read yields the event
+  loop no matter how it is written.
+- **Run leases** — a run carries `ownerId` (a uuid per process) and `heartbeatAt`, refreshed
+  by a 30s timer while its loop is alive. Startup closes only runs whose heartbeat is older
+  than `RUN_LEASE_MS`, so a second instance booting cannot kill a healthy peer's run. The
+  heartbeat is a timer rather than a write inside the loop because the loop pauses for
+  `REQUEST_DELAY_MS` and `RATE_LIMIT_BACKOFF_MS`, and pacing must not look like death.
+  An expired lease is **also** reclaimed when a new run is refused, not only on boot: a
+  process that crashes and restarts inside the lease window would otherwise skip the run at
+  startup and never look again, leaving the lock held by an owner that no longer exists.
+  **Every write to a run is pinned to its owner** (`updateMany` on `{ id, ownerId }`): a
+  reaped run must not be able to report itself `COMPLETED` afterwards.
 - **`SeedService`** — writes the demo dataset when `SEED_DEMO_DATA=true` *and* the database
   has no cities. Fail-closed, and never touches a database that already has data.
 - **Rate limiting** — 100 requests/minute globally via `ThrottlerModule`.
@@ -211,6 +227,12 @@ IngestionRun (standalone — one collection run and its progress counters)
   city-month and the run carries on. A single bad field nulls that column only — never drop
   the day.
 - **Idempotency** — always `upsert` on `(cityId, date)`. Re-running a month must converge.
+- **Uniqueness is decided by the database, never by a prior read.** Checking whether a row
+  exists and then writing it is two statements with a yield in between, so both callers can
+  pass the check. Attempt the write and catch the rejection with `isUniqueViolation()`
+  (`prisma/prisma-errors.ts`), mapping it to whatever the checked path would have said —
+  `409` for a second collection run, the same `400` for a duplicate city slug. A pre-flight
+  check may stay for its better message, but it is never the guarantee.
 - **Validation** — `class-validator` DTOs; the global `ValidationPipe` keeps
   `whitelist: true` and `forbidNonWhitelisted: true`.
 - **Security** — `helmet` stays active; CORS origins come from `FRONTEND_URL`.

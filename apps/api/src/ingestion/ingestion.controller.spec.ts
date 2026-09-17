@@ -17,6 +17,9 @@ const run = (overrides: Partial<IngestionRun> = {}): IngestionRun => ({
   errorMessage: null,
   startedAt: new Date('2026-08-05T08:00:00.000Z'),
   finishedAt: null,
+  // Lease bookkeeping: held by the service, never exposed through the DTO.
+  ownerId: 'this-process',
+  heartbeatAt: new Date('2026-08-05T08:00:00.000Z'),
   ...overrides,
 });
 
@@ -126,5 +129,16 @@ describe('IngestionController', () => {
       expect(result).toMatchObject({ status: 'COMPLETED', processed: 4 });
       expect(result?.finishedAt).toBe('2026-08-05T08:03:00.000Z');
     });
+  });
+
+  // Lease bookkeeping is how the service decides who owns a run; it is not part
+  // of the run's public shape, and the UI polls this payload.
+  it('keeps the lease columns out of the response', async () => {
+    ingestionService.getActiveRun.mockResolvedValue(run());
+
+    const result = await controller.getActiveRun();
+
+    expect(result).not.toHaveProperty('ownerId');
+    expect(result).not.toHaveProperty('heartbeatAt');
   });
 });

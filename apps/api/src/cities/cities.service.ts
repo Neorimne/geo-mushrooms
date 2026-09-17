@@ -5,6 +5,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { isUniqueViolation } from '../prisma/prisma-errors';
 import { AreasService } from '../areas/areas.service';
 import { IngestionService } from '../ingestion/ingestion.service';
 import {
@@ -54,6 +55,9 @@ export class CitiesService {
     }
 
     const normalizedSlug = slug.toLowerCase();
+    // A pre-flight check, kept for the message it gives: it costs one query and
+    // lets a duplicate be rejected before the archive is asked about the slug.
+    // It is not the guarantee, though — see the create below.
     const existingCity = await this.prisma.city.findUnique({
       where: { slug: normalizedSlug },
     });
@@ -71,16 +75,27 @@ export class CitiesService {
 
     const finalAreaId = await this.resolveAreaId(dto.areaId, areaName);
 
-    const newCity = await this.prisma.city.create({
-      data: {
-        name,
-        slug: normalizedSlug,
-        areaId: finalAreaId,
-        isActive: true,
-        sourceLocalityId,
-      },
-      include: { area: true },
-    });
+    // The check above and this insert are two statements, so two requests for
+    // the same slug can both pass the check. `City.slug` is unique, so the
+    // database refuses the second one — and without this catch that arrived as
+    // an unhandled P2002, i.e. a 500 for what the checked path already calls a
+    // bad request. Same rule, same answer, whichever way it is reached.
+    let newCity;
+    try {
+      newCity = await this.prisma.city.create({
+        data: {
+          name,
+          slug: normalizedSlug,
+          areaId: finalAreaId,
+          isActive: true,
+          sourceLocalityId,
+        },
+        include: { area: true },
+      });
+    } catch (error) {
+      if (!isUniqueViolation(error)) throw error;
+      throw new BadRequestException('City with this slug already exists');
+    }
 
     // Kick off a first collection for the new city — a whole-season backfill, so
     // a city added mid-season arrives with history rather than a single day.

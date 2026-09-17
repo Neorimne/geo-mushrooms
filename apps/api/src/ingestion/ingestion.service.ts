@@ -9,6 +9,8 @@ import {
 } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
+import { isUniqueViolation } from '../prisma/prisma-errors';
+import { randomUUID } from 'node:crypto';
 import { City, IngestionRun, Prisma } from '@prisma/client';
 import {
   ARCHIVE_PROVIDER,
@@ -28,6 +30,8 @@ import {
   INGESTION_TRIGGER,
   IngestionTrigger,
   MONTH_REQUEST_DELAY_MS,
+  RUN_HEARTBEAT_MS,
+  RUN_LEASE_MS,
   RATE_LIMIT_BACKOFF_MS,
   REQUEST_DELAY_MS,
   SEASON_START_MONTH,
@@ -58,30 +62,75 @@ export class IngestionService implements OnModuleInit {
   /** The loop of the run currently in flight, so callers can await a run they only started. */
   private inFlight: Promise<void> | null = null;
 
+  /**
+   * Identifies this process in the runs it owns. Generated per boot, never
+   * reused: a restarted process is a different owner, which is exactly what the
+   * reaper needs to know.
+   */
+  private readonly ownerId = randomUUID();
+
+  /** Refreshes the lease of the run in flight; null when nothing is running. */
+  private heartbeat: NodeJS.Timeout | null = null;
+
   constructor(
     private prisma: PrismaService,
     @Inject(ARCHIVE_PROVIDER) private archive: ArchiveProvider,
   ) {}
 
   /**
-   * A RUNNING row can only survive a restart if the process died mid-run — nothing
-   * is collecting for it any more, so close it out instead of letting it block
-   * every future run.
+   * Closes runs whose owner stopped proving it was alive.
+   *
+   * A RUNNING row survives a restart only if the process died mid-run, and
+   * nothing is collecting for it any more — but "the process died" is not the
+   * same as "a process is booting". This used to mark *every* RUNNING row
+   * FAILED unconditionally, so a second instance starting up killed a healthy
+   * peer's live collection, and the loop it killed carried on writing counters
+   * to a row it no longer owned before flipping it to COMPLETED at the end.
+   *
+   * The lease is what tells the two apart: a run whose heartbeat is older than
+   * `RUN_LEASE_MS` has no live owner, and one that is still being refreshed is
+   * someone else's work in progress.
    */
   async onModuleInit() {
+    const count = await this.closeExpiredRuns(
+      'Interrupted by a server restart',
+    );
+
+    if (count > 0) {
+      this.logger.warn(`Closed ${count} interrupted collection run(s) from a previous process`);
+    }
+  }
+
+  /**
+   * Closes every RUNNING run whose lease has lapsed, and reports how many.
+   *
+   * Called on boot and again whenever a new run is refused. Boot alone is not
+   * enough: a process that crashes and restarts *inside* the lease window sees
+   * a heartbeat that still looks fresh, skips the run, and then never looks
+   * again — leaving a run with no living owner holding the lock for good. The
+   * lock is only contested when somebody wants it, so that is the other moment
+   * worth asking whether it is still genuinely held.
+   */
+  private async closeExpiredRuns(errorMessage: string): Promise<number> {
+    const expiredBefore = new Date(Date.now() - RUN_LEASE_MS);
+
     const { count } = await this.prisma.ingestionRun.updateMany({
-      where: { status: INGESTION_STATUS.RUNNING },
+      where: {
+        status: INGESTION_STATUS.RUNNING,
+        OR: [
+          { heartbeatAt: null },
+          { heartbeatAt: { lt: expiredBefore } },
+        ],
+      },
       data: {
         status: INGESTION_STATUS.FAILED,
-        errorMessage: 'Interrupted by a server restart',
+        errorMessage,
         currentCity: null,
         finishedAt: new Date(),
       },
     });
 
-    if (count > 0) {
-      this.logger.warn(`Closed ${count} interrupted collection run(s) from a previous process`);
-    }
+    return count;
   }
 
   @Cron(CronExpression.EVERY_DAY_AT_10AM)
@@ -287,6 +336,46 @@ export class IngestionService implements OnModuleInit {
   // --- Run lifecycle -------------------------------------------------------
 
   /**
+   * Keeps this process's claim on a run fresh while its loop is alive.
+   *
+   * A timer rather than a write inside the loop, because the loop's own pauses
+   * are the problem: it sits out `REQUEST_DELAY_MS` between cities and
+   * `RATE_LIMIT_BACKOFF_MS` after a rate limit, so heartbeats carried by its
+   * counter writes could be more than five minutes apart and honest pacing
+   * would read as a dead process.
+   *
+   * `unref()` so a pending tick never holds the process open at shutdown — the
+   * lease is meant to outlive a crash, not to delay an exit. A failed refresh is
+   * logged and skipped: one missed tick is well inside `RUN_LEASE_MS`, and
+   * killing a healthy run over a transient database error would be the very
+   * fault this exists to prevent.
+   */
+  private startHeartbeat(runId: number) {
+    this.stopHeartbeat();
+    this.heartbeat = setInterval(() => {
+      this.prisma.ingestionRun
+        .updateMany({
+          where: { id: runId, ownerId: this.ownerId },
+          data: { heartbeatAt: new Date() },
+        })
+        .catch((e: unknown) =>
+          this.logger.warn(
+            `Run #${runId}: heartbeat missed — ${e instanceof Error ? e.message : String(e)}`,
+          ),
+        );
+    }, RUN_HEARTBEAT_MS);
+
+    this.heartbeat.unref?.();
+  }
+
+  private stopHeartbeat() {
+    if (this.heartbeat) {
+      clearInterval(this.heartbeat);
+      this.heartbeat = null;
+    }
+  }
+
+  /**
    * Records the run, then lets the collection loop continue in the background so
    * the caller can respond immediately with the run id.
    */
@@ -295,29 +384,72 @@ export class IngestionService implements OnModuleInit {
     trigger: IngestionTrigger,
     scopeLabel: string,
   ): Promise<IngestionRun> {
-    const active = await this.getActiveRun();
-    if (active) {
-      throw new ConflictException(
-        `A collection run is already in progress (${active.scopeLabel ?? `#${active.id}`})`,
-      );
-    }
-
     const totalUnits = plans.reduce((sum, p) => sum + p.months.length, 0);
 
-    const run = await this.prisma.ingestionRun.create({
-      data: {
-        trigger,
-        status: INGESTION_STATUS.RUNNING,
-        scopeLabel,
-        totalCities: totalUnits,
-      },
-    });
+    // The insert is the lock. A partial unique index on (status) WHERE
+    // status = 'RUNNING' means the database decides who wins, so two callers
+    // that arrive together get one run and one 409 rather than two runs.
+    //
+    // Reading first and then creating cannot do this, whatever the read
+    // returns: the read yields the event loop, and the row it did not see may
+    // be inserted before the create lands.
+    const insert = () =>
+      this.prisma.ingestionRun.create({
+        data: {
+          trigger,
+          status: INGESTION_STATUS.RUNNING,
+          scopeLabel,
+          totalCities: totalUnits,
+          ownerId: this.ownerId,
+          heartbeatAt: new Date(),
+        },
+      });
+
+    let run: IngestionRun;
+    try {
+      run = await insert();
+    } catch (error) {
+      if (!isUniqueViolation(error)) throw error;
+
+      // Something holds the lock. It may not still be alive: a process that
+      // crashed and restarted inside the lease window left a run the boot
+      // reaper skipped, and nothing else would ever reclaim it. This is the
+      // moment to check, because it is the moment somebody wants the lock.
+      const reclaimed = await this.closeExpiredRuns(
+        'Abandoned — the process holding it stopped responding',
+      );
+
+      if (reclaimed > 0) {
+        this.logger.warn(
+          `Reclaimed ${reclaimed} collection run(s) whose lease had expired`,
+        );
+      }
+
+      try {
+        // Exactly one retry. If the insert is refused again the holder is live,
+        // or another caller took the lock we just freed — either way the honest
+        // answer is that a run is in progress.
+        run = reclaimed > 0 ? await insert() : await Promise.reject(error);
+      } catch (retryError) {
+        if (!isUniqueViolation(retryError)) throw retryError;
+
+        // The active run is re-read only to name it, and may already be over.
+        const active = await this.getActiveRun();
+        throw new ConflictException(
+          `A collection run is already in progress${
+            active ? ` (${active.scopeLabel ?? `#${active.id}`})` : ''
+          }`,
+        );
+      }
+    }
 
     this.logger.log(
       `🚀 Run #${run.id} started (${trigger}, ${plans.length} cit${plans.length === 1 ? 'y' : 'ies'} / ${totalUnits} unit(s): ${scopeLabel})`,
     );
 
+    this.startHeartbeat(run.id);
     this.inFlight = this.executeRun(run.id, plans).finally(() => {
+      this.stopHeartbeat();
       this.inFlight = null;
     });
 
@@ -393,8 +525,8 @@ export class IngestionService implements OnModuleInit {
             counters[ok ? 'processed' : 'failed']++;
           }
 
-          await this.prisma.ingestionRun.update({
-            where: { id: runId },
+          await this.prisma.ingestionRun.updateMany({
+            where: { id: runId, ownerId: this.ownerId },
             data: { processed: counters.processed, failed: counters.failed },
           });
 
@@ -413,8 +545,13 @@ export class IngestionService implements OnModuleInit {
         }
       }
 
-      await this.prisma.ingestionRun.update({
-        where: { id: runId },
+      // Pinned to the owner, like every terminal write: a run whose lease
+      // expired and was reaped is no longer ours to finish, and updateMany
+      // simply matches nothing rather than resurrecting a FAILED row as
+      // COMPLETED. That resurrection is what made the old unconditional reaper
+      // hard to see — the row ended up looking fine.
+      await this.prisma.ingestionRun.updateMany({
+        where: { id: runId, ownerId: this.ownerId },
         data: {
           status: INGESTION_STATUS.COMPLETED,
           currentCity: null,
@@ -435,8 +572,8 @@ export class IngestionService implements OnModuleInit {
       this.logger.error(`❌ Run #${runId} aborted: ${message}`);
 
       await this.prisma.ingestionRun
-        .update({
-          where: { id: runId },
+        .updateMany({
+          where: { id: runId, ownerId: this.ownerId },
           data: {
             status: INGESTION_STATUS.FAILED,
             errorMessage: message,
@@ -535,8 +672,8 @@ export class IngestionService implements OnModuleInit {
       );
     }
 
-    await this.prisma.ingestionRun.update({
-      where: { id: runId },
+    await this.prisma.ingestionRun.updateMany({
+      where: { id: runId, ownerId: this.ownerId },
       data: { processed: counters.processed, failed: counters.failed },
     });
 
@@ -566,7 +703,7 @@ export class IngestionService implements OnModuleInit {
     currentCity: string | null,
   ): Promise<void> {
     await this.prisma.ingestionRun
-      .update({ where: { id: runId }, data: { currentCity } })
+      .updateMany({ where: { id: runId, ownerId: this.ownerId }, data: { currentCity } })
       .catch((e) =>
         this.logger.warn(`Could not update the current unit of run #${runId}:`, e),
       );

@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConflictException, NotFoundException } from '@nestjs/common';
-import { City } from '@prisma/client';
+import { City, Prisma } from '@prisma/client';
 import { IngestionService } from './ingestion.service';
 import {
   ARCHIVE_PROVIDER,
@@ -12,6 +12,8 @@ import {
   INGESTION_STATUS,
   INGESTION_TRIGGER,
   MONTH_REQUEST_DELAY_MS,
+  RUN_HEARTBEAT_MS,
+  RUN_LEASE_MS,
   RATE_LIMIT_BACKOFF_MS,
   REQUEST_DELAY_MS,
 } from './ingestion.constants';
@@ -30,7 +32,33 @@ type RunRow = {
   errorMessage: string | null;
   startedAt: Date;
   finishedAt: Date | null;
+  ownerId: string | null;
+  heartbeatAt: Date | null;
 };
+
+/** The subset of `where` the service actually uses against ingestion_runs. */
+type RunWhere = {
+  id?: number;
+  status?: string;
+  ownerId?: string;
+  OR?: { heartbeatAt: null | { lt: Date } }[];
+};
+
+/** Matches a row the way Prisma would, so updateMany can be filtered honestly. */
+function matches(run: RunRow, where: RunWhere = {}): boolean {
+  if (where.id !== undefined && run.id !== where.id) return false;
+  if (where.status !== undefined && run.status !== where.status) return false;
+  if (where.ownerId !== undefined && run.ownerId !== where.ownerId) return false;
+  if (where.OR) {
+    const any = where.OR.some((clause) =>
+      clause.heartbeatAt === null
+        ? run.heartbeatAt === null
+        : run.heartbeatAt !== null && run.heartbeatAt < clause.heartbeatAt.lt,
+    );
+    if (!any) return false;
+  }
+  return true;
+}
 
 const city = (
   id: number,
@@ -138,6 +166,25 @@ describe('IngestionService', () => {
       // A small in-memory stand-in, so counters can be asserted as the run progresses.
       ingestionRun: {
         create: jest.fn(({ data }: { data: Partial<RunRow> }) => {
+          // Models the partial unique index on (status) WHERE status = 'RUNNING'.
+          // Without this the double would accept a second RUNNING row that the
+          // real database refuses, and every lock test would pass by default.
+          if (
+            data.status === INGESTION_STATUS.RUNNING &&
+            runs.some((r) => r.status === INGESTION_STATUS.RUNNING)
+          ) {
+            return Promise.reject(
+              new Prisma.PrismaClientKnownRequestError(
+                'Unique constraint failed on the fields: (`status`)',
+                {
+                  code: 'P2002',
+                  clientVersion: 'test',
+                  meta: { target: 'ingestion_runs_single_running' },
+                },
+              ),
+            );
+          }
+
           const run: RunRow = {
             id: runs.length + 1,
             trigger: '',
@@ -150,6 +197,8 @@ describe('IngestionService', () => {
             errorMessage: null,
             startedAt: new Date(),
             finishedAt: null,
+            ownerId: null,
+            heartbeatAt: null,
             ...data,
           };
           runs.push(run);
@@ -173,10 +222,10 @@ describe('IngestionService', () => {
             where,
             data,
           }: {
-            where: { status: string };
+            where?: RunWhere;
             data: Partial<RunRow>;
           }) => {
-            const matched = runs.filter((r) => r.status === where.status);
+            const matched = runs.filter((r) => matches(r, where));
             matched.forEach((r) => Object.assign(r, data));
             return Promise.resolve({ count: matched.length });
           },
@@ -315,6 +364,45 @@ describe('IngestionService', () => {
       await service.whenIdle();
     });
 
+    // The test above awaits the first start before attempting the second, so
+    // the two never overlap — and the lock it proves is a check-then-act:
+    // getActiveRun() is a database read, which yields the event loop, and the
+    // create that follows is not conditional on what it saw.
+    //
+    // This is not a theoretical window. CitiesService fires startCityRun
+    // without awaiting it from a request handler while the cron fires on its
+    // own timer, so two triggers really can interleave exactly here.
+    it('refuses the second of two runs triggered concurrently', async () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(MID_MONTH);
+      prismaService.city.findMany.mockResolvedValue([
+        city(1, 'Alpha'),
+        city(2, 'Beta'),
+      ]);
+      prismaService.city.findUnique.mockResolvedValue(city(3, 'Gamma'));
+
+      const settled = await Promise.allSettled([
+        service.startFullRun(),
+        service.startCityRun(3),
+      ]);
+
+      const started = settled.filter((r) => r.status === 'fulfilled');
+      const refused = settled.filter(
+        (r): r is PromiseRejectedResult => r.status === 'rejected',
+      );
+
+      expect(started).toHaveLength(1);
+      expect(refused).toHaveLength(1);
+      expect(refused[0].reason).toBeInstanceOf(ConflictException);
+
+      // The database is the thing that has to hold: exactly one row may be
+      // RUNNING, whatever the callers did.
+      expect(runs.filter((r) => r.status === INGESTION_STATUS.RUNNING)).toHaveLength(1);
+
+      await jest.advanceTimersByTimeAsync(REQUEST_DELAY_MS);
+      await service.whenIdle();
+    });
+
     it('rejects a run for a city that does not exist', async () => {
       prismaService.city.findUnique.mockResolvedValue(null);
 
@@ -348,20 +436,25 @@ describe('IngestionService', () => {
       });
     });
 
+    /** A run owned by some other process, whose lease is `ageMs` old. */
+    const abandonedRun = (ageMs: number): RunRow => ({
+      id: 1,
+      trigger: 'CRON',
+      status: INGESTION_STATUS.RUNNING,
+      scopeLabel: 'All cities',
+      totalCities: 5,
+      processed: 2,
+      failed: 0,
+      currentCity: 'Beta',
+      errorMessage: null,
+      startedAt: new Date(Date.now() - ageMs),
+      finishedAt: null,
+      ownerId: 'a-previous-process',
+      heartbeatAt: new Date(Date.now() - ageMs),
+    });
+
     it('closes runs left RUNNING by a previous process on startup', async () => {
-      runs.push({
-        id: 1,
-        trigger: 'CRON',
-        status: INGESTION_STATUS.RUNNING,
-        scopeLabel: 'All cities',
-        totalCities: 5,
-        processed: 2,
-        failed: 0,
-        currentCity: 'Beta',
-        errorMessage: null,
-        startedAt: new Date(),
-        finishedAt: null,
-      });
+      runs.push(abandonedRun(RUN_LEASE_MS * 2));
 
       await service.onModuleInit();
 
@@ -371,6 +464,76 @@ describe('IngestionService', () => {
       });
       expect(runs[0].errorMessage).toContain('restart');
       expect(await service.getActiveRun()).toBeNull();
+    });
+
+    // The reaper used to close every RUNNING row unconditionally. With one
+    // process that reads as tidy-up; with two it is an incident, because the
+    // second instance to boot kills the first one's live collection — and the
+    // loop it killed goes on writing to a row it no longer owns.
+    it('leaves a run alone while another process is still refreshing its lease', async () => {
+      runs.push(abandonedRun(RUN_HEARTBEAT_MS));
+
+      await service.onModuleInit();
+
+      expect(runs[0].status).toBe(INGESTION_STATUS.RUNNING);
+      expect(runs[0].finishedAt).toBeNull();
+      expect(await service.getActiveRun()).toMatchObject({ id: 1 });
+    });
+
+    it('does not let a reaped run report itself finished', async () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(MID_MONTH);
+      prismaService.city.findUnique.mockResolvedValue(city(1, 'Alpha'));
+
+      await service.startCityRun(1);
+
+      // Something else decided this run was dead while its loop was mid-flight.
+      runs[0].status = INGESTION_STATUS.FAILED;
+      runs[0].ownerId = 'a-different-process';
+
+      await service.whenIdle();
+
+      // Every terminal write is pinned to the owner, so the loop's COMPLETED
+      // matches no row rather than overwriting someone else's verdict.
+      expect(runs[0].status).toBe(INGESTION_STATUS.FAILED);
+    });
+
+    // Reaping only on boot is not enough. A process that crashes and restarts
+    // inside the lease window sees a heartbeat that still looks fresh, skips
+    // the run, and never looks again — so the lock would be held for good by an
+    // owner that no longer exists. The lock is only contested when somebody
+    // wants it, which is the other moment worth asking whether it is still held.
+    it('reclaims a run whose lease expired after the last startup', async () => {
+      // The clock is pinned first: abandonedRun() dates its heartbeat relative
+      // to now, and a row stamped before the jump would sit in the future.
+      jest.useFakeTimers();
+      jest.setSystemTime(MID_MONTH);
+      runs.push(abandonedRun(RUN_LEASE_MS * 2));
+      prismaService.city.findUnique.mockResolvedValue(city(1, 'Alpha'));
+
+      // No onModuleInit here: this process has been up all along.
+      await expect(service.startCityRun(1)).resolves.toMatchObject({
+        status: INGESTION_STATUS.RUNNING,
+      });
+
+      expect(runs[0].status).toBe(INGESTION_STATUS.FAILED);
+      expect(runs[0].errorMessage).toContain('stopped responding');
+      expect(runs.filter((r) => r.status === INGESTION_STATUS.RUNNING)).toHaveLength(1);
+
+      await service.whenIdle();
+    });
+
+    it('still refuses when the run holding the lock is alive', async () => {
+      runs.push(abandonedRun(RUN_HEARTBEAT_MS));
+      prismaService.city.findUnique.mockResolvedValue(city(1, 'Alpha'));
+
+      await expect(service.startCityRun(1)).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+
+      // Untouched: a live lease is somebody else's work, not a stale lock.
+      expect(runs[0].status).toBe(INGESTION_STATUS.RUNNING);
+      expect(runs[0].errorMessage).toBeNull();
     });
   });
 
