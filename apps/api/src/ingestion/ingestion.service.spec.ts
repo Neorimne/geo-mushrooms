@@ -315,6 +315,45 @@ describe('IngestionService', () => {
       await service.whenIdle();
     });
 
+    // The test above awaits the first start before attempting the second, so
+    // the two never overlap — and the lock it proves is a check-then-act:
+    // getActiveRun() is a database read, which yields the event loop, and the
+    // create that follows is not conditional on what it saw.
+    //
+    // This is not a theoretical window. CitiesService fires startCityRun
+    // without awaiting it from a request handler while the cron fires on its
+    // own timer, so two triggers really can interleave exactly here.
+    it('refuses the second of two runs triggered concurrently', async () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(MID_MONTH);
+      prismaService.city.findMany.mockResolvedValue([
+        city(1, 'Alpha'),
+        city(2, 'Beta'),
+      ]);
+      prismaService.city.findUnique.mockResolvedValue(city(3, 'Gamma'));
+
+      const settled = await Promise.allSettled([
+        service.startFullRun(),
+        service.startCityRun(3),
+      ]);
+
+      const started = settled.filter((r) => r.status === 'fulfilled');
+      const refused = settled.filter(
+        (r): r is PromiseRejectedResult => r.status === 'rejected',
+      );
+
+      expect(started).toHaveLength(1);
+      expect(refused).toHaveLength(1);
+      expect(refused[0].reason).toBeInstanceOf(ConflictException);
+
+      // The database is the thing that has to hold: exactly one row may be
+      // RUNNING, whatever the callers did.
+      expect(runs.filter((r) => r.status === INGESTION_STATUS.RUNNING)).toHaveLength(1);
+
+      await jest.advanceTimersByTimeAsync(REQUEST_DELAY_MS);
+      await service.whenIdle();
+    });
+
     it('rejects a run for a city that does not exist', async () => {
       prismaService.city.findUnique.mockResolvedValue(null);
 
