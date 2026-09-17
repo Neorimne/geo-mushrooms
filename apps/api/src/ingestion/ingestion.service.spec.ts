@@ -12,6 +12,8 @@ import {
   INGESTION_STATUS,
   INGESTION_TRIGGER,
   MONTH_REQUEST_DELAY_MS,
+  RUN_HEARTBEAT_MS,
+  RUN_LEASE_MS,
   RATE_LIMIT_BACKOFF_MS,
   REQUEST_DELAY_MS,
 } from './ingestion.constants';
@@ -30,7 +32,33 @@ type RunRow = {
   errorMessage: string | null;
   startedAt: Date;
   finishedAt: Date | null;
+  ownerId: string | null;
+  heartbeatAt: Date | null;
 };
+
+/** The subset of `where` the service actually uses against ingestion_runs. */
+type RunWhere = {
+  id?: number;
+  status?: string;
+  ownerId?: string;
+  OR?: { heartbeatAt: null | { lt: Date } }[];
+};
+
+/** Matches a row the way Prisma would, so updateMany can be filtered honestly. */
+function matches(run: RunRow, where: RunWhere = {}): boolean {
+  if (where.id !== undefined && run.id !== where.id) return false;
+  if (where.status !== undefined && run.status !== where.status) return false;
+  if (where.ownerId !== undefined && run.ownerId !== where.ownerId) return false;
+  if (where.OR) {
+    const any = where.OR.some((clause) =>
+      clause.heartbeatAt === null
+        ? run.heartbeatAt === null
+        : run.heartbeatAt !== null && run.heartbeatAt < clause.heartbeatAt.lt,
+    );
+    if (!any) return false;
+  }
+  return true;
+}
 
 const city = (
   id: number,
@@ -169,6 +197,8 @@ describe('IngestionService', () => {
             errorMessage: null,
             startedAt: new Date(),
             finishedAt: null,
+            ownerId: null,
+            heartbeatAt: null,
             ...data,
           };
           runs.push(run);
@@ -192,10 +222,10 @@ describe('IngestionService', () => {
             where,
             data,
           }: {
-            where: { status: string };
+            where?: RunWhere;
             data: Partial<RunRow>;
           }) => {
-            const matched = runs.filter((r) => r.status === where.status);
+            const matched = runs.filter((r) => matches(r, where));
             matched.forEach((r) => Object.assign(r, data));
             return Promise.resolve({ count: matched.length });
           },
@@ -406,20 +436,25 @@ describe('IngestionService', () => {
       });
     });
 
+    /** A run owned by some other process, whose lease is `ageMs` old. */
+    const abandonedRun = (ageMs: number): RunRow => ({
+      id: 1,
+      trigger: 'CRON',
+      status: INGESTION_STATUS.RUNNING,
+      scopeLabel: 'All cities',
+      totalCities: 5,
+      processed: 2,
+      failed: 0,
+      currentCity: 'Beta',
+      errorMessage: null,
+      startedAt: new Date(Date.now() - ageMs),
+      finishedAt: null,
+      ownerId: 'a-previous-process',
+      heartbeatAt: new Date(Date.now() - ageMs),
+    });
+
     it('closes runs left RUNNING by a previous process on startup', async () => {
-      runs.push({
-        id: 1,
-        trigger: 'CRON',
-        status: INGESTION_STATUS.RUNNING,
-        scopeLabel: 'All cities',
-        totalCities: 5,
-        processed: 2,
-        failed: 0,
-        currentCity: 'Beta',
-        errorMessage: null,
-        startedAt: new Date(),
-        finishedAt: null,
-      });
+      runs.push(abandonedRun(RUN_LEASE_MS * 2));
 
       await service.onModuleInit();
 
@@ -429,6 +464,38 @@ describe('IngestionService', () => {
       });
       expect(runs[0].errorMessage).toContain('restart');
       expect(await service.getActiveRun()).toBeNull();
+    });
+
+    // The reaper used to close every RUNNING row unconditionally. With one
+    // process that reads as tidy-up; with two it is an incident, because the
+    // second instance to boot kills the first one's live collection — and the
+    // loop it killed goes on writing to a row it no longer owns.
+    it('leaves a run alone while another process is still refreshing its lease', async () => {
+      runs.push(abandonedRun(RUN_HEARTBEAT_MS));
+
+      await service.onModuleInit();
+
+      expect(runs[0].status).toBe(INGESTION_STATUS.RUNNING);
+      expect(runs[0].finishedAt).toBeNull();
+      expect(await service.getActiveRun()).toMatchObject({ id: 1 });
+    });
+
+    it('does not let a reaped run report itself finished', async () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(MID_MONTH);
+      prismaService.city.findUnique.mockResolvedValue(city(1, 'Alpha'));
+
+      await service.startCityRun(1);
+
+      // Something else decided this run was dead while its loop was mid-flight.
+      runs[0].status = INGESTION_STATUS.FAILED;
+      runs[0].ownerId = 'a-different-process';
+
+      await service.whenIdle();
+
+      // Every terminal write is pinned to the owner, so the loop's COMPLETED
+      // matches no row rather than overwriting someone else's verdict.
+      expect(runs[0].status).toBe(INGESTION_STATUS.FAILED);
     });
   });
 

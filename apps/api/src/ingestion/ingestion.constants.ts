@@ -72,3 +72,23 @@ export const DAILY_LOOKBACK_DAYS = 5;
  * current foraging season.
  */
 export const SEASON_START_MONTH = 4;
+
+/**
+ * How often the process holding a run refreshes its lease.
+ *
+ * Deliberately far shorter than `RUN_LEASE_MS`: the point is that several
+ * heartbeats can be missed -- to a slow query, a paused container, a long
+ * garbage-collection pause -- before anything concludes the run is dead.
+ */
+export const RUN_HEARTBEAT_MS = 30_000;
+
+/**
+ * How stale a run's heartbeat must be before a starting process may close it.
+ *
+ * A run pauses for a long time by design: `REQUEST_DELAY_MS` between cities and
+ * `RATE_LIMIT_BACKOFF_MS` after a rate limit, so the loop's own database writes
+ * can be more than five minutes apart. That is why the heartbeat is a timer of
+ * its own rather than something the loop writes as it goes -- pacing must not
+ * look like death.
+ */
+export const RUN_LEASE_MS = 2 * 60_000;

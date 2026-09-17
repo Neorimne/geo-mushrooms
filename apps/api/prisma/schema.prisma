@@ -153,6 +153,13 @@ model IngestionRun {
   startedAt  DateTime  @default(now())
   finishedAt DateTime?
 
+  // Who is collecting for this run, and when they last said so. The process
+  // that starts a run stamps its own id and refreshes `heartbeatAt` while the
+  // loop is alive, so a restart can tell a run whose process died from one
+  // another instance is still working on. See RUN_LEASE_MS.
+  ownerId     String?
+  heartbeatAt DateTime?
+
   @@index([startedAt])
   @@map("ingestion_runs")
 
