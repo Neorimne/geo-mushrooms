@@ -101,14 +101,21 @@ apps/
   client-e2e/    Playwright E2E tests (hermetic — no backend needed)
 libs/
   auth/          data-access (AuthStore, guard, interceptor) + feature-login
-  catalog/       data-access (WeatherStore, models) + feature-list +
+  catalog/       data-access (WeatherStore) + util-model + feature-list +
                  feature-city-detail + ui-card + ui-chart
-  shared/        ui-toast (global notifications)
+  shared/        ui-toast + util-toast + util-config + util-archive
 ```
 
-Libraries are layered `data-access` / `feature-*` / `ui-*` and wired through `@geo/*`
-path aliases; feature libs are lazy-loaded by the router. Apps never import from each
-other — `libs/` are the only shared units, with boundaries enforced by Nx.
+Libraries are layered `util-*` / `data-access` / `feature-*` / `ui-*` and wired through
+`@geo/*` path aliases; feature libs are lazy-loaded by the router. Apps never import from
+each other — `libs/` are the only shared units.
+
+Those boundaries are **enforced, not just described**. Every project carries `type:` and
+`scope:` tags, and `eslint.config.mjs` turns them into `@nx/enforce-module-boundaries`
+constraints: `ui-*` may not reach the data layer, `data-access` may not reach back up into
+`ui-*`, the e2e suites may not import library code at all, and the Nest app may depend only
+on shared framework-free libraries. `npx nx run-many -t lint` fails if the graph stops
+matching that description.
 
 **Data model** (PostgreSQL via Prisma):
 
