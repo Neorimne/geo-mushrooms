@@ -4,7 +4,7 @@ import {
   isFresh,
   precipUnitLabel,
   windSpeedKmh,
-} from '@geo/catalog/data-access';
+} from '@geo/catalog/util-model';
 import { SparklineComponent, WindArrowComponent } from '@geo/catalog/ui-chart';
 
 /**

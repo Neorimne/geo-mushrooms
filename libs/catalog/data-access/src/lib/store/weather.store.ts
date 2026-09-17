@@ -12,7 +12,7 @@ import {
   DetailRange,
   IngestionRun,
   Observation,
-} from '../models/observation.model';
+} from '@geo/catalog/util-model';
 import { inject, computed } from '@angular/core';
 import { WeatherApiService } from '../services/weather-api.service';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';

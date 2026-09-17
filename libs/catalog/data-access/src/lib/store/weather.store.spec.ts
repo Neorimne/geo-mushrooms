@@ -8,7 +8,7 @@ import {
   CitySummary,
   IngestionRun,
   Observation,
-} from '../models/observation.model';
+} from '@geo/catalog/util-model';
 
 type ApiMock = Record<
   | 'getSummaries'

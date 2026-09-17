@@ -8,7 +8,7 @@ import {
   IngestionRun,
   Note,
   Observation,
-} from '../models/observation.model';
+} from '@geo/catalog/util-model';
 
 @Injectable({ providedIn: 'root' })
 export class WeatherApiService {

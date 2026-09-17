@@ -3,7 +3,7 @@ import {
   Observation,
   windArrowRotation,
   windSpeedKmh,
-} from '@geo/catalog/data-access';
+} from '@geo/catalog/util-model';
 import {
   Extent,
   SECONDARY_CHART_BOX,

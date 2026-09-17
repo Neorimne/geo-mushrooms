@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
-import { Observation, precipInMm } from '@geo/catalog/data-access';
+import { Observation, precipInMm } from '@geo/catalog/util-model';
 import {
   SPARKLINE_BOX,
   extentOf,

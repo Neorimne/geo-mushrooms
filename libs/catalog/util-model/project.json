@@ -1,0 +1,15 @@
+{
+  "name": "catalog-util-model",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/catalog/util-model/src",
+  "projectType": "library",
+  "tags": ["type:util", "scope:catalog"],
+  "targets": {
+    "test": {
+      "outputs": ["{workspaceRoot}/coverage/{projectRoot}"]
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

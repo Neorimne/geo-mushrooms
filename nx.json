@@ -91,6 +91,7 @@
         "libs/catalog/feature-list/**/*",
         "libs/catalog/ui-card/**/*",
         "libs/catalog/ui-chart/**/*",
+        "libs/catalog/util-model/**/*",
         "libs/shared/ui-toast/**/*"
       ]
     },

@@ -3,12 +3,8 @@ import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
 import { of } from 'rxjs';
-import {
-  API_URL,
-  CitySummary,
-  Observation,
-  WeatherApiService,
-} from '@geo/catalog/data-access';
+import { API_URL, WeatherApiService } from '@geo/catalog/data-access';
+import { CitySummary, Observation } from '@geo/catalog/util-model';
 import { CityDetailComponent } from './city-detail';
 
 function observation(id: number, date: string, overrides: Partial<Observation> = {}): Observation {

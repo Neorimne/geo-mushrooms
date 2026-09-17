@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Observation } from '@geo/catalog/data-access';
+import { Observation } from '@geo/catalog/util-model';
 import { ObservationChartsComponent } from './observation-charts';
 import { AXIS_GUTTER_PX } from './chart-geometry';
 

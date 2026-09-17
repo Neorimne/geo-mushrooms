@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { CitySummary, Observation, newestArchiveDayIso } from '@geo/catalog/data-access';
+import { CitySummary, Observation, newestArchiveDayIso } from '@geo/catalog/util-model';
 import { CitySummaryCardComponent } from './city-summary-card';
 
 function observation(date: string, overrides: Partial<Observation> = {}): Observation {

@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Note } from '@geo/catalog/data-access';
+import { Note } from '@geo/catalog/util-model';
 
 /**
  * The hand-written note on one observed day: add, edit, delete.
