@@ -3,7 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { HttpClient, provideHttpClient, withInterceptors, withXhr } from '@angular/common/http';
 import { authInterceptor } from './auth.interceptor';
 import { AuthStore } from '../store/auth.store';
-import { ToastStore } from '@geo/shared/ui-toast';
+import { ToastStore } from '@geo/shared/util-toast';
 
 describe('authInterceptor', () => {
   let httpMock: HttpTestingController;

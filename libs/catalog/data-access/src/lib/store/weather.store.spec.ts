@@ -3,7 +3,7 @@ import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { of, throwError } from 'rxjs';
 import { WeatherStore, rangeWindow } from './weather.store';
 import { WeatherApiService } from '../services/weather-api.service';
-import { ToastStore } from '@geo/shared/ui-toast';
+import { ToastStore } from '@geo/shared/util-toast';
 import {
   CitySummary,
   IngestionRun,

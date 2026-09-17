@@ -1,5 +1,5 @@
 import { Component, inject } from '@angular/core';
-import { ToastStore, ToastType } from '../state/toast.store';
+import { ToastStore, ToastType } from '@geo/shared/util-toast';
 
 /**
  * One class string per toast type.

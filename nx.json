@@ -93,7 +93,8 @@
         "libs/catalog/ui-chart/**/*",
         "libs/catalog/util-model/**/*",
         "libs/shared/ui-toast/**/*",
-        "libs/shared/util-config/**/*"
+        "libs/shared/util-config/**/*",
+        "libs/shared/util-toast/**/*"
       ]
     },
     {
