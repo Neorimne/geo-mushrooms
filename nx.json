@@ -91,7 +91,11 @@
         "libs/catalog/feature-list/**/*",
         "libs/catalog/ui-card/**/*",
         "libs/catalog/ui-chart/**/*",
-        "libs/shared/ui-toast/**/*"
+        "libs/catalog/util-model/**/*",
+        "libs/shared/ui-toast/**/*",
+        "libs/shared/util-archive/**/*",
+        "libs/shared/util-config/**/*",
+        "libs/shared/util-toast/**/*"
       ]
     },
     {

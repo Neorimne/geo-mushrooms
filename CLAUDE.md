@@ -19,8 +19,9 @@ the schema (`date` is a calendar day, not a timestamp), the run planner (it anch
 archive's edge, never the calendar's) and the UI (a city is "up to date" when its latest
 day *is* that edge). Reading the edge as *yesterday* marks every city stale for ever — the
 same false alarm as reading it as *today*, one step further along. The lag lives in one
-constant, `ARCHIVE_VALIDATION_DAYS`, mirrored in `ingestion.constants.ts` and
-`observation.model.ts` because an Angular library cannot import from a Nest app.
+constant, `ARCHIVE_VALIDATION_DAYS` in `libs/shared/util-archive`, which the Nest app and
+the client both import. It is framework-free precisely so that it can be: an Angular
+library cannot import from a Nest app, so the constant lives in neither.
 
 ## Commands
 
@@ -79,12 +80,35 @@ apps/
   client-e2e/    Playwright E2E (hermetic — route interception, no backend)
 libs/
   auth/          data-access (AuthStore, guard, interceptor) + feature-login
-  catalog/       data-access + feature-list + feature-city-detail + ui-card + ui-chart
-  shared/        ui-toast
+  catalog/       data-access + util-model + feature-list + feature-city-detail +
+                 ui-card + ui-chart
+  shared/        ui-toast + util-toast + util-config + util-archive
 ```
 
-Libraries are layered `data-access` / `feature-*` / `ui-*` behind `@geo/*` aliases. Apps
-never import from each other; `libs/` are the only shared units, enforced by Nx.
+Libraries are layered `util-*` / `data-access` / `feature-*` / `ui-*` behind `@geo/*`
+aliases. Apps never import from each other; `libs/` are the only shared units.
+
+**The layering is enforced, and the rules are the specification.** Every project carries
+`type:` and `scope:` tags in its `project.json`, and `eslint.config.mjs` turns them into
+`@nx/enforce-module-boundaries` constraints. Before adding an import, check what it implies:
+
+- `type:util` is the floor — it may depend only on other `util` libs.
+- `type:ui` may not depend on `type:data-access`. A chart needs types and pure functions,
+  which is what `catalog/util-model` is for; if it seems to need a store, the component is
+  doing the feature layer's job.
+- `type:data-access` may not depend on `type:ui`. `ToastStore` lives in `shared/util-toast`
+  for this reason — a store that raises a notification must not have a component in reach.
+- `type:e2e` may depend on **no** library at all. `apps/client-e2e` mocks the API it tests,
+  so sharing code with the app would let the test and the code agree by construction. This
+  is why the archive edge is spelled out again in its `mocks.ts`.
+- `scope:api` may depend only on `scope:shared`. The Nest app takes framework-free
+  libraries and nothing else.
+- `scope:catalog` → `scope:auth` is allowed deliberately: the list header owns the logout
+  control, and both catalog features read `AuthStore`.
+
+Adding a library means four edits, and missing either of the last two fails quietly: the
+lib's own files, a `@geo/*` entry in `tsconfig.base.json`, the source glob in the
+`@nx/jest/plugin` `include` array in `nx.json`, and `tags` in its `project.json`.
 
 ### The provider seam — read this before touching ingestion
 
@@ -109,7 +133,9 @@ Three things make it hold, and each is easy to undo by accident:
 - **`RateLimitError` / `KeyExtractionError` / `PayloadShapeError` are shared vocabulary**,
   not adapter internals: the run reacts to them by name, and any provider may raise them.
 
-`ARCHIVE_VALIDATION_DAYS` is likewise shared — any provider must honour the edge.
+`ARCHIVE_VALIDATION_DAYS` is likewise shared — any provider must honour the edge. It lives
+in `libs/shared/util-archive` with `newestArchiveDayIso()` / `newestArchiveDayUtc()`; the
+edge is computed in one place, not re-derived per caller.
 `REQUEST_DELAY_MS` and `MONTH_REQUEST_DELAY_MS` are the opposite: they exist for a source
 with a rate limit and mean nothing to one without.
 

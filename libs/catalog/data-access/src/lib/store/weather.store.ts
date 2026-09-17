@@ -12,14 +12,14 @@ import {
   DetailRange,
   IngestionRun,
   Observation,
-} from '../models/observation.model';
+} from '@geo/catalog/util-model';
 import { inject, computed } from '@angular/core';
 import { WeatherApiService } from '../services/weather-api.service';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
 import { pipe, forkJoin, timer, Observable } from 'rxjs';
 import { switchMap, takeWhile, tap } from 'rxjs/operators';
 import { tapResponse } from '@ngrx/operators';
-import { ToastStore } from '@geo/shared/ui-toast';
+import { ToastStore } from '@geo/shared/util-toast';
 
 /** How often to ask the backend how the run in flight is doing. */
 export const RUN_POLL_INTERVAL_MS = 3000;

@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Observation } from '@geo/catalog/data-access';
+import { Observation } from '@geo/catalog/util-model';
 import { HumidityChartComponent } from './humidity-chart';
 
 function day(overrides: Partial<Observation> = {}): Observation {

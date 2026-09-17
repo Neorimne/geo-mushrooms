@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
-import { Observation } from '@geo/catalog/data-access';
+import { Observation } from '@geo/catalog/util-model';
 import {
   Extent,
   SECONDARY_CHART_BOX,

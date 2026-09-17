@@ -6,7 +6,7 @@ import {
   monthOfDays,
   newestPublishedDay,
 } from './synthetic.provider';
-import { ARCHIVE_VALIDATION_DAYS } from '../../ingestion.constants';
+import { ARCHIVE_VALIDATION_DAYS } from '@geo/shared/util-archive';
 import { generateDay } from './weather-generator';
 
 describe('SyntheticArchiveProvider', () => {

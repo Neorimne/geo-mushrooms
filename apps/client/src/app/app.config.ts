@@ -7,7 +7,7 @@ import { provideRouter, withComponentInputBinding } from '@angular/router';
 import { appRoutes } from './app.routes';
 import { provideHttpClient, withFetch, withInterceptors } from '@angular/common/http';
 import { environment } from '../environments/environment';
-import { API_URL } from '@geo/catalog/data-access';
+import { API_URL } from '@geo/shared/util-config';
 import { authInterceptor } from '@geo/auth/data-access';
 
 export const appConfig: ApplicationConfig = {

@@ -9,7 +9,7 @@ import {
   Observation,
   precipUnitLabel,
   windSpeedKmh,
-} from '@geo/catalog/data-access';
+} from '@geo/catalog/util-model';
 import {
   AXIS_GUTTER_PX,
   DAILY_CHART_BOX,

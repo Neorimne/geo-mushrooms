@@ -21,8 +21,8 @@ import {
   PayloadShapeError,
   RateLimitError,
 } from './archive.errors';
+import { newestArchiveDayUtc } from '@geo/shared/util-archive';
 import {
-  ARCHIVE_VALIDATION_DAYS,
   DAILY_LOOKBACK_DAYS,
   INGESTION_STATUS,
   INGESTION_TRIGGER,
@@ -242,25 +242,14 @@ export class IngestionService implements OnModuleInit {
     return cities.map((city) => ({ city, months }));
   }
 
-  private yesterday(): Date {
-    const d = new Date();
-    return new Date(
-      Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - 1),
-    );
-  }
-
   /**
    * The newest day the archive can possibly hold.
    *
-   * Not yesterday: the source withholds its last `ARCHIVE_VALIDATION_DAYS`
-   * while they are checked by its meteorologists, so the edge is D-3. Every
-   * question of the form "what is the latest we could ask about" has to be
-   * asked of this, not of the calendar.
+   * Shared with the client rather than computed here: both have to agree on
+   * where the archive ends, and they used to agree only by coincidence.
    */
   private newestArchiveDay(): Date {
-    const d = this.yesterday();
-    d.setUTCDate(d.getUTCDate() - ARCHIVE_VALIDATION_DAYS);
-    return d;
+    return newestArchiveDayUtc();
   }
 
   /** 'YYYY-MM-01' for the month the date falls in. */

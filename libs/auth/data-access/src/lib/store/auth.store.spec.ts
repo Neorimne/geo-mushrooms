@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { AuthStore } from './auth.store';
 import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { RouterTestingModule } from '@angular/router/testing';
-import { API_URL } from '@geo/catalog/data-access';
+import { API_URL } from '@geo/shared/util-config';
 
 describe('AuthStore', () => {
   let store: InstanceType<typeof AuthStore>;

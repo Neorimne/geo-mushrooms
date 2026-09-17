@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Note } from '@geo/catalog/data-access';
+import { Note } from '@geo/catalog/util-model';
 import { NoteEditorComponent } from './note-editor';
 
 const NOTE: Note = {

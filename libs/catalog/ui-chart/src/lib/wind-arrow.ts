@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
-import { windArrowRotation, windDirectionLabel } from '@geo/catalog/data-access';
+import { windArrowRotation, windDirectionLabel } from '@geo/catalog/util-model';
 
 /**
  * The wind direction glyph, and optionally the direction in words.

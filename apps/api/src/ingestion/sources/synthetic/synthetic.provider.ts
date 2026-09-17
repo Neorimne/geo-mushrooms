@@ -4,7 +4,7 @@ import {
   ArchiveSession,
   ParsedDay,
 } from '../../archive-provider';
-import { ARCHIVE_VALIDATION_DAYS } from '../../ingestion.constants';
+import { newestArchiveDayUtc } from '@geo/shared/util-archive';
 import { generateDay, hash } from './weather-generator';
 
 export const PROVIDER_ID = 'synthetic';
@@ -128,8 +128,5 @@ export function monthOfDays(localityId: number, month: string): ParsedDay[] {
  * honours the same edge the app expects.
  */
 export function newestPublishedDay(): Date {
-  const d = new Date();
-  d.setUTCHours(0, 0, 0, 0);
-  d.setUTCDate(d.getUTCDate() - 1 - ARCHIVE_VALIDATION_DAYS);
-  return d;
+  return newestArchiveDayUtc();
 }

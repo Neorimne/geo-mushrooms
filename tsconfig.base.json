@@ -17,7 +17,11 @@
     "paths": {
       "@geo/catalog/data-access": ["libs/catalog/data-access/src/index.ts"],
       "@geo/catalog/ui-card": ["libs/catalog/ui-card/src/index.ts"],
+      "@geo/catalog/util-model": ["libs/catalog/util-model/src/index.ts"],
       "@geo/shared/ui-toast": ["libs/shared/ui-toast/src/index.ts"],
+      "@geo/shared/util-archive": ["libs/shared/util-archive/src/index.ts"],
+      "@geo/shared/util-config": ["libs/shared/util-config/src/index.ts"],
+      "@geo/shared/util-toast": ["libs/shared/util-toast/src/index.ts"],
       "@geo/catalog/feature-list": ["libs/catalog/feature-list/src/index.ts"],
       "@geo/auth/data-access": ["libs/auth/data-access/src/index.ts"],
       "@geo/auth/feature-login": ["libs/auth/feature-login/src/index.ts"],

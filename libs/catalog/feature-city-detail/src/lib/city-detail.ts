@@ -1,12 +1,12 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, OnInit, numberAttribute } from '@angular/core';
 import { Router } from '@angular/router';
+import { WeatherStore } from '@geo/catalog/data-access';
 import {
   DetailRange,
   Observation,
   precipUnitLabel,
-  WeatherStore,
   windSpeedKmh,
-} from '@geo/catalog/data-access';
+} from '@geo/catalog/util-model';
 import {
   ObservationChartsComponent,
   WindArrowComponent,

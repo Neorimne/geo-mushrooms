@@ -57,10 +57,15 @@ export const ROUTES = {
 /**
  * The archive's edge as 'YYYY-MM-DD' — what the app treats as fresh.
  *
- * D-3, not yesterday: the source withholds its last two days for validation.
- * This mirrors `ARCHIVE_VALIDATION_DAYS` in the app rather than importing it,
- * because the e2e project deliberately depends on no library code — so when
- * that constant moves, this is the copy that has to move with it.
+ * D-3, not yesterday: a daily archive withholds its last two days while they
+ * are validated.
+ *
+ * This is the one copy of that arithmetic left standing, and it stays on
+ * purpose. The suite mocks the API it tests, so importing the app's own
+ * `@geo/shared/util-archive` would let the test and the code agree by
+ * construction rather than by working. The `type:e2e` dep constraint in
+ * `eslint.config.mjs` enforces that independence now, so this copy is a
+ * decision the linter holds us to rather than an oversight waiting to drift.
  */
 export function newestArchiveDayIso(): string {
   const now = new Date();

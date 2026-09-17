@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { API_URL } from '../tokens/api-url.token';
+import { API_URL } from '@geo/shared/util-config';
 import {
   Area,
   City,
@@ -8,7 +8,7 @@ import {
   IngestionRun,
   Note,
   Observation,
-} from '../models/observation.model';
+} from '@geo/catalog/util-model';
 
 @Injectable({ providedIn: 'root' })
 export class WeatherApiService {

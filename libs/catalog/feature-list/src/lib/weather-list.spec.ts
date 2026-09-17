@@ -3,14 +3,14 @@ import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter, Router } from '@angular/router';
 import { of } from 'rxjs';
+import { WeatherApiService } from '@geo/catalog/data-access';
+import { API_URL } from '@geo/shared/util-config';
 import {
-  API_URL,
   CitySummary,
   IngestionRun,
   Observation,
-  WeatherApiService,
-  newestArchiveDayIso,
-} from '@geo/catalog/data-access';
+} from '@geo/catalog/util-model';
+import { newestArchiveDayIso } from '@geo/shared/util-archive';
 import { WeatherListComponent } from './weather-list';
 
 const runningRun: IngestionRun = {

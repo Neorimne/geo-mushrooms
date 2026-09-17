@@ -1,7 +1,7 @@
 import { inject } from '@angular/core';
 import { HttpInterceptorFn, HttpErrorResponse } from '@angular/common/http';
 import { AuthStore } from '../store/auth.store';
-import { ToastStore } from '@geo/shared/ui-toast';
+import { ToastStore } from '@geo/shared/util-toast';
 import { catchError, throwError } from 'rxjs';
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
