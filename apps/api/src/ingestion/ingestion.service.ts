@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
+import { isUniqueViolation } from '../prisma/prisma-errors';
 import { City, IngestionRun, Prisma } from '@prisma/client';
 import {
   ARCHIVE_PROVIDER,
@@ -295,23 +296,37 @@ export class IngestionService implements OnModuleInit {
     trigger: IngestionTrigger,
     scopeLabel: string,
   ): Promise<IngestionRun> {
-    const active = await this.getActiveRun();
-    if (active) {
-      throw new ConflictException(
-        `A collection run is already in progress (${active.scopeLabel ?? `#${active.id}`})`,
-      );
-    }
-
     const totalUnits = plans.reduce((sum, p) => sum + p.months.length, 0);
 
-    const run = await this.prisma.ingestionRun.create({
-      data: {
-        trigger,
-        status: INGESTION_STATUS.RUNNING,
-        scopeLabel,
-        totalCities: totalUnits,
-      },
-    });
+    // The insert is the lock. A partial unique index on (status) WHERE
+    // status = 'RUNNING' means the database decides who wins, so two callers
+    // that arrive together get one run and one 409 rather than two runs.
+    //
+    // Reading first and then creating cannot do this, whatever the read
+    // returns: the read yields the event loop, and the row it did not see may
+    // be inserted before the create lands.
+    let run: IngestionRun;
+    try {
+      run = await this.prisma.ingestionRun.create({
+        data: {
+          trigger,
+          status: INGESTION_STATUS.RUNNING,
+          scopeLabel,
+          totalCities: totalUnits,
+        },
+      });
+    } catch (error) {
+      if (!isUniqueViolation(error)) throw error;
+
+      // Losing the race is the same answer as finding a run already there; the
+      // active run is re-read only to name it, and may already have finished.
+      const active = await this.getActiveRun();
+      throw new ConflictException(
+        `A collection run is already in progress${
+          active ? ` (${active.scopeLabel ?? `#${active.id}`})` : ''
+        }`,
+      );
+    }
 
     this.logger.log(
       `🚀 Run #${run.id} started (${trigger}, ${plans.length} cit${plans.length === 1 ? 'y' : 'ies'} / ${totalUnits} unit(s): ${scopeLabel})`,

@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConflictException, NotFoundException } from '@nestjs/common';
-import { City } from '@prisma/client';
+import { City, Prisma } from '@prisma/client';
 import { IngestionService } from './ingestion.service';
 import {
   ARCHIVE_PROVIDER,
@@ -138,6 +138,25 @@ describe('IngestionService', () => {
       // A small in-memory stand-in, so counters can be asserted as the run progresses.
       ingestionRun: {
         create: jest.fn(({ data }: { data: Partial<RunRow> }) => {
+          // Models the partial unique index on (status) WHERE status = 'RUNNING'.
+          // Without this the double would accept a second RUNNING row that the
+          // real database refuses, and every lock test would pass by default.
+          if (
+            data.status === INGESTION_STATUS.RUNNING &&
+            runs.some((r) => r.status === INGESTION_STATUS.RUNNING)
+          ) {
+            return Promise.reject(
+              new Prisma.PrismaClientKnownRequestError(
+                'Unique constraint failed on the fields: (`status`)',
+                {
+                  code: 'P2002',
+                  clientVersion: 'test',
+                  meta: { target: 'ingestion_runs_single_running' },
+                },
+              ),
+            );
+          }
+
           const run: RunRow = {
             id: runs.length + 1,
             trigger: '',
