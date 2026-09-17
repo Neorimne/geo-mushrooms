@@ -1,3 +1,5 @@
+import { newestArchiveDayIso } from '@geo/shared/util-archive';
+
 export interface Area {
   id: number;
   name: string;
@@ -194,35 +196,6 @@ export interface IngestionRun {
 
 /** How far back a detail view reaches. */
 export type DetailRange = '14d' | '30d' | 'season';
-
-/**
- * Days the source withholds while its meteorologists check them, so the archive
- * ends at D-3 rather than D-1.
- *
- * The `/storico` page states it: «Ultimi due giorni in validazione». Mirrored
- * from `ingestion.constants.ts`, which this library cannot import — change both
- * together.
- */
-export const ARCHIVE_VALIDATION_DAYS = 2;
-
-/**
- * The freshest day the archive can possibly hold, as 'YYYY-MM-DD'.
- *
- * Not yesterday. Reading it as yesterday marked every city "not updated" for
- * ever — the same false alarm as expecting *today*, one step further along.
- */
-export function newestArchiveDayIso(): string {
-  const now = new Date();
-  return new Date(
-    Date.UTC(
-      now.getUTCFullYear(),
-      now.getUTCMonth(),
-      now.getUTCDate() - 1 - ARCHIVE_VALIDATION_DAYS,
-    ),
-  )
-    .toISOString()
-    .slice(0, 10);
-}
 
 /**
  * Whether a city is as up to date as the source allows — which is what the

@@ -47,21 +47,6 @@ export const MONTH_REQUEST_DELAY_MS = 15_000;
 export const RATE_LIMIT_BACKOFF_MS = 5 * 60_000;
 
 /**
- * Days the source withholds while its meteorologists check them.
- *
- * The `/storico` page says so outright — «Ultimi due giorni in validazione: i
- * dati vengono verificati dai nostri meteorologi prima della pubblicazione» —
- * so the newest day that can possibly exist is **D-3**, not D-1. Verified
- * against the live endpoint on 2026-09-07: September held exactly four days,
- * 09-01 to 09-04, with 09-05 and 09-06 still in validation.
- *
- * This number is the whole reason the archive's edge is not "yesterday". It is
- * mirrored on the client in `observation.model.ts`, which cannot import it —
- * change both together.
- */
-export const ARCHIVE_VALIDATION_DAYS = 2;
-
-/**
  * How far back of the calendar a *daily* run re-checks, in days.
  *
  * The daily pass used to plan exactly one month — the one containing the newest

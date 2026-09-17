@@ -7,8 +7,8 @@ import {
   windArrowRotation,
   windDirectionLabel,
   windSpeedKmh,
-  newestArchiveDayIso,
 } from './observation.model';
+import { newestArchiveDayIso } from '@geo/shared/util-archive';
 
 function day(overrides: Partial<Observation> = {}): Observation {
   return {

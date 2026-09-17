@@ -9,8 +9,8 @@ import {
   CitySummary,
   IngestionRun,
   Observation,
-  newestArchiveDayIso,
 } from '@geo/catalog/util-model';
+import { newestArchiveDayIso } from '@geo/shared/util-archive';
 import { WeatherListComponent } from './weather-list';
 
 const runningRun: IngestionRun = {
