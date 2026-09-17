@@ -4,7 +4,7 @@
   "sourceRoot": "libs/catalog/feature-list/src",
   "prefix": "lib",
   "projectType": "library",
-  "tags": [],
+  "tags": ["type:feature", "scope:catalog"],
   "targets": {
     "test": {
       "outputs": ["{workspaceRoot}/coverage/{projectRoot}"]

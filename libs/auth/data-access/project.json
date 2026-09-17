@@ -4,7 +4,7 @@
   "sourceRoot": "libs/auth/data-access/src",
   "prefix": "lib",
   "projectType": "library",
-  "tags": [],
+  "tags": ["type:data-access", "scope:auth"],
   "targets": {
     "test": {
       "outputs": ["{workspaceRoot}/coverage/{projectRoot}"]

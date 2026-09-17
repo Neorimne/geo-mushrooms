@@ -4,7 +4,7 @@
   "sourceRoot": "libs/catalog/ui-card/src",
   "prefix": "lib",
   "projectType": "library",
-  "tags": [],
+  "tags": ["type:ui", "scope:catalog"],
   "targets": {
     "test": {
       "outputs": ["{workspaceRoot}/coverage/{projectRoot}"]
