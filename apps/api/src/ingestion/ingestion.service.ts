@@ -92,6 +92,26 @@ export class IngestionService implements OnModuleInit {
    * someone else's work in progress.
    */
   async onModuleInit() {
+    const count = await this.closeExpiredRuns(
+      'Interrupted by a server restart',
+    );
+
+    if (count > 0) {
+      this.logger.warn(`Closed ${count} interrupted collection run(s) from a previous process`);
+    }
+  }
+
+  /**
+   * Closes every RUNNING run whose lease has lapsed, and reports how many.
+   *
+   * Called on boot and again whenever a new run is refused. Boot alone is not
+   * enough: a process that crashes and restarts *inside* the lease window sees
+   * a heartbeat that still looks fresh, skips the run, and then never looks
+   * again — leaving a run with no living owner holding the lock for good. The
+   * lock is only contested when somebody wants it, so that is the other moment
+   * worth asking whether it is still genuinely held.
+   */
+  private async closeExpiredRuns(errorMessage: string): Promise<number> {
     const expiredBefore = new Date(Date.now() - RUN_LEASE_MS);
 
     const { count } = await this.prisma.ingestionRun.updateMany({
@@ -104,15 +124,13 @@ export class IngestionService implements OnModuleInit {
       },
       data: {
         status: INGESTION_STATUS.FAILED,
-        errorMessage: 'Interrupted by a server restart',
+        errorMessage,
         currentCity: null,
         finishedAt: new Date(),
       },
     });
 
-    if (count > 0) {
-      this.logger.warn(`Closed ${count} interrupted collection run(s) from a previous process`);
-    }
+    return count;
   }
 
   @Cron(CronExpression.EVERY_DAY_AT_10AM)
@@ -375,9 +393,8 @@ export class IngestionService implements OnModuleInit {
     // Reading first and then creating cannot do this, whatever the read
     // returns: the read yields the event loop, and the row it did not see may
     // be inserted before the create lands.
-    let run: IngestionRun;
-    try {
-      run = await this.prisma.ingestionRun.create({
+    const insert = () =>
+      this.prisma.ingestionRun.create({
         data: {
           trigger,
           status: INGESTION_STATUS.RUNNING,
@@ -387,17 +404,43 @@ export class IngestionService implements OnModuleInit {
           heartbeatAt: new Date(),
         },
       });
+
+    let run: IngestionRun;
+    try {
+      run = await insert();
     } catch (error) {
       if (!isUniqueViolation(error)) throw error;
 
-      // Losing the race is the same answer as finding a run already there; the
-      // active run is re-read only to name it, and may already have finished.
-      const active = await this.getActiveRun();
-      throw new ConflictException(
-        `A collection run is already in progress${
-          active ? ` (${active.scopeLabel ?? `#${active.id}`})` : ''
-        }`,
+      // Something holds the lock. It may not still be alive: a process that
+      // crashed and restarted inside the lease window left a run the boot
+      // reaper skipped, and nothing else would ever reclaim it. This is the
+      // moment to check, because it is the moment somebody wants the lock.
+      const reclaimed = await this.closeExpiredRuns(
+        'Abandoned — the process holding it stopped responding',
       );
+
+      if (reclaimed > 0) {
+        this.logger.warn(
+          `Reclaimed ${reclaimed} collection run(s) whose lease had expired`,
+        );
+      }
+
+      try {
+        // Exactly one retry. If the insert is refused again the holder is live,
+        // or another caller took the lock we just freed — either way the honest
+        // answer is that a run is in progress.
+        run = reclaimed > 0 ? await insert() : await Promise.reject(error);
+      } catch (retryError) {
+        if (!isUniqueViolation(retryError)) throw retryError;
+
+        // The active run is re-read only to name it, and may already be over.
+        const active = await this.getActiveRun();
+        throw new ConflictException(
+          `A collection run is already in progress${
+            active ? ` (${active.scopeLabel ?? `#${active.id}`})` : ''
+          }`,
+        );
+      }
     }
 
     this.logger.log(

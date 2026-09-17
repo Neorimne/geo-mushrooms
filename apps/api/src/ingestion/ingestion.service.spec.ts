@@ -497,6 +497,44 @@ describe('IngestionService', () => {
       // matches no row rather than overwriting someone else's verdict.
       expect(runs[0].status).toBe(INGESTION_STATUS.FAILED);
     });
+
+    // Reaping only on boot is not enough. A process that crashes and restarts
+    // inside the lease window sees a heartbeat that still looks fresh, skips
+    // the run, and never looks again — so the lock would be held for good by an
+    // owner that no longer exists. The lock is only contested when somebody
+    // wants it, which is the other moment worth asking whether it is still held.
+    it('reclaims a run whose lease expired after the last startup', async () => {
+      // The clock is pinned first: abandonedRun() dates its heartbeat relative
+      // to now, and a row stamped before the jump would sit in the future.
+      jest.useFakeTimers();
+      jest.setSystemTime(MID_MONTH);
+      runs.push(abandonedRun(RUN_LEASE_MS * 2));
+      prismaService.city.findUnique.mockResolvedValue(city(1, 'Alpha'));
+
+      // No onModuleInit here: this process has been up all along.
+      await expect(service.startCityRun(1)).resolves.toMatchObject({
+        status: INGESTION_STATUS.RUNNING,
+      });
+
+      expect(runs[0].status).toBe(INGESTION_STATUS.FAILED);
+      expect(runs[0].errorMessage).toContain('stopped responding');
+      expect(runs.filter((r) => r.status === INGESTION_STATUS.RUNNING)).toHaveLength(1);
+
+      await service.whenIdle();
+    });
+
+    it('still refuses when the run holding the lock is alive', async () => {
+      runs.push(abandonedRun(RUN_HEARTBEAT_MS));
+      prismaService.city.findUnique.mockResolvedValue(city(1, 'Alpha'));
+
+      await expect(service.startCityRun(1)).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+
+      // Untouched: a live lease is somebody else's work, not a stale lock.
+      expect(runs[0].status).toBe(INGESTION_STATUS.RUNNING);
+      expect(runs[0].errorMessage).toBeNull();
+    });
   });
 
   describe('Daily runs', () => {

@@ -161,6 +161,9 @@ the client, the seam is being bypassed.
   than `RUN_LEASE_MS`, so a second instance booting cannot kill a healthy peer's run. The
   heartbeat is a timer rather than a write inside the loop because the loop pauses for
   `REQUEST_DELAY_MS` and `RATE_LIMIT_BACKOFF_MS`, and pacing must not look like death.
+  An expired lease is **also** reclaimed when a new run is refused, not only on boot: a
+  process that crashes and restarts inside the lease window would otherwise skip the run at
+  startup and never look again, leaving the lock held by an owner that no longer exists.
   **Every write to a run is pinned to its owner** (`updateMany` on `{ id, ownerId }`): a
   reaped run must not be able to report itself `COMPLETED` afterwards.
 - **`SeedService`** — writes the demo dataset when `SEED_DEMO_DATA=true` *and* the database
