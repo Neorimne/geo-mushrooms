@@ -84,8 +84,10 @@ re-collecting a month converges on the same values instead of churning them.
   read fails the run *loudly* instead of storing nothing quietly.
 - **Per-day notes** — editable field notes attached to any observed day, which survive
   re-collection because the upsert updates in place rather than deleting and reinserting.
-- **JWT auth** — all data endpoints are guarded; the Angular client attaches the token
-  via a functional HTTP interceptor.
+- **JWT auth, default-deny** — one global guard closes every route, so a new endpoint is
+  protected without anyone remembering to protect it; the two public ones say so at the
+  point of definition. The Angular client attaches the token via a functional HTTP
+  interceptor.
 - **Dev tools** — fail-closed, env-gated endpoints for deleting a day's data during
   development.
 
@@ -247,7 +249,7 @@ is itself the news.
 
 - **Backend:** NestJS with a global `ValidationPipe` (`whitelist` +
   `forbidNonWhitelisted`), `helmet`, env-driven CORS, `ThrottlerModule` (100 req/min),
-  and JWT auth. Secrets come from `ConfigService` — no hardcoded fallbacks, and
+  and default-deny JWT auth. Secrets come from `ConfigService` — no hardcoded fallbacks, and
   `JwtModule.registerAsync` fails fast without `JWT_SECRET`.
 - **Frontend:** Angular with zoneless change detection, standalone components, native
   control flow (`@if` / `@for`), `inject()`, and state in root `signalStore`s
