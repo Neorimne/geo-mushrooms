@@ -13,10 +13,8 @@ import { ObservationsService } from './observations.service';
 import { UpsertNoteDto } from './dto/upsert-note.dto';
 import { ObservationsQueryDto, SummaryQueryDto } from './dto/query.dto';
 import { CitySummaryDto, NoteDto, ObservationDto } from './dto/observation.dto';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { DevToolsGuard } from '../auth/dev-tools.guard';
 
-@UseGuards(JwtAuthGuard)
 @Controller('observations')
 export class ObservationsController {
   constructor(private readonly observationsService: ObservationsService) {}

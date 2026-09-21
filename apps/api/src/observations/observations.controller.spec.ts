@@ -3,7 +3,6 @@ import { validate } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
 import { ObservationsController } from './observations.controller';
 import { ObservationsService } from './observations.service';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { DevToolsGuard } from '../auth/dev-tools.guard';
 import { ObservationsQueryDto, SummaryQueryDto } from './dto/query.dto';
 
@@ -36,8 +35,9 @@ describe('ObservationsController', () => {
         { provide: ObservationsService, useValue: observationsService },
       ],
     })
-      .overrideGuard(JwtAuthGuard)
-      .useValue({ canActivate: () => true })
+      // Only DevToolsGuard is stubbed. The JWT check is global now, so the
+      // controller names no guard for it — but these two routes still carry
+      // their own, because guards stack rather than replace one another.
       .overrideGuard(DevToolsGuard)
       .useValue({ canActivate: () => true })
       .compile();

@@ -8,17 +8,19 @@ import { AddressInfo } from 'node:net';
 import * as bcrypt from 'bcrypt';
 import { AppModule } from './app.module';
 import { PrismaService } from './prisma/prisma.service';
+import { Public } from './auth/public.decorator';
 
 /**
  * Boots the real `AppModule` over real HTTP — the only spec in the repo that
- * does. Everything else here builds an isolated module with hand-stubbed
- * dependencies, which is why nothing until now could notice that the
- * application as a whole is fail-open: `JwtAuthGuard` is applied controller by
- * controller, so a controller that forgets it is simply public.
+ * does. Everything else builds an isolated module with hand-stubbed
+ * dependencies, which is why nothing could previously notice that the
+ * application as a whole was fail-open: `JwtAuthGuard` was applied controller
+ * by controller, so a controller that forgot it was simply public.
  *
  * `ProbeController` is that forgotten controller, written deliberately. It
- * declares no guard and no decorator of any kind, which is exactly what a
- * controller added next week will look like.
+ * declares no guard and no decorator of any kind — exactly what a controller
+ * added next week will look like — and it is closed anyway. That is the whole
+ * claim, and it is not provable anywhere but here.
  *
  * Note what this spec does NOT set up: the global `ValidationPipe`, `helmet`
  * and CORS all live in `main.ts` and are not applied here. This is a test of
@@ -46,6 +48,20 @@ class ProbeController {
   }
 }
 
+/**
+ * The class-level half of `@Public()`. No production route uses it — both real
+ * exemptions are on methods — so without this the guard's `getClass()` target
+ * would be asserted only by a comment nobody can check.
+ */
+@Public()
+@Controller('__probe/public')
+class PublicProbeController {
+  @Get()
+  probe(@Req() request: Request & { user?: unknown }) {
+    return { user: request.user ?? null };
+  }
+}
+
 describe('AppModule — default-deny auth', () => {
   let app: INestApplication;
   let base: string;
@@ -55,6 +71,7 @@ describe('AppModule — default-deny auth', () => {
     // The seeder is off, but if it ever ran it would stop here rather than
     // inventing a demo dataset inside a unit test.
     city: { count: jest.fn().mockResolvedValue(1) },
+    area: { findMany: jest.fn().mockResolvedValue([]) },
     // `IngestionService.onModuleInit` reaps expired leases and this is its only
     // boot-time database call.
     ingestionRun: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
@@ -84,7 +101,7 @@ describe('AppModule — default-deny auth', () => {
 
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
-      controllers: [ProbeController],
+      controllers: [ProbeController, PublicProbeController],
     })
       .overrideProvider(PrismaService)
       .useValue(prisma)
@@ -121,6 +138,14 @@ describe('AppModule — default-deny auth', () => {
       expect(res.status).toBe(201);
       expect(await res.json()).toEqual({ access_token: expect.any(String) });
     });
+
+    it('serves a class-level @Public() route, and tells it nothing about a caller', async () => {
+      const res = await get('/__probe/public');
+
+      expect(res.status).toBe(200);
+      // A public handler must never be handed an identity nothing verified.
+      expect(await res.json()).toEqual({ user: null });
+    });
   });
 
   describe('the routes it does not', () => {
@@ -130,6 +155,53 @@ describe('AppModule — default-deny auth', () => {
 
     it('closes a controller that declares no guard', async () => {
       expect((await get('/__probe')).status).toBe(401);
+    });
+
+    // AreasController carries no auth decorator of any kind any more. This is
+    // the headline: it is closed by the application's default, not by anything
+    // written in the file.
+    it('closes GET /areas, which no longer names a guard at all', async () => {
+      expect((await get('/areas')).status).toBe(401);
+    });
+
+    // A dev-tools route needs both checks, and the order matters: an anonymous
+    // caller is refused for being anonymous, and cannot learn from a 403
+    // whether dev tools happen to be enabled in this deployment.
+    it('answers a dev-tools route 401 rather than 403 when there is no token', async () => {
+      const res = await fetch(`${base}/observations/latest/city/1`, {
+        method: 'DELETE',
+      });
+
+      expect(res.status).toBe(401);
+    });
+  });
+
+  describe('with a token', () => {
+    let token: string;
+
+    beforeAll(async () => {
+      const res = await login(ADMIN.email, ADMIN.password);
+      ({ access_token: token } = (await res.json()) as { access_token: string });
+    });
+
+    // Default-deny, not deny-everything: the same route the case above refused
+    // has to open for a valid token, or the guard is just a wall.
+    it('opens GET /areas', async () => {
+      expect((await get('/areas', token)).status).toBe(200);
+    });
+
+    it('hands the verified payload to the handler', async () => {
+      const res = await get('/__probe', token);
+
+      expect(res.status).toBe(200);
+      // Every future handler reads the caller from here.
+      expect(await res.json()).toEqual({
+        user: expect.objectContaining({ email: ADMIN.email, sub: ADMIN.id }),
+      });
+    });
+
+    it('refuses a token it cannot verify', async () => {
+      expect((await get('/cities', 'not-a-real-token')).status).toBe(401);
     });
   });
 });

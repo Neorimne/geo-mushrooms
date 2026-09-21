@@ -3,7 +3,6 @@ import { ConflictException } from '@nestjs/common';
 import { IngestionRun } from '@prisma/client';
 import { IngestionController } from './ingestion.controller';
 import { IngestionService } from './ingestion.service';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 const run = (overrides: Partial<IngestionRun> = {}): IngestionRun => ({
   id: 7,
@@ -49,10 +48,9 @@ describe('IngestionController', () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [IngestionController],
       providers: [{ provide: IngestionService, useValue: ingestionService }],
-    })
-      .overrideGuard(JwtAuthGuard)
-      .useValue({ canActivate: () => true })
-      .compile();
+      // No guard to stand in for: the JWT check is global now, and the
+      // controller declares none of its own.
+    }).compile();
 
     controller = module.get<IngestionController>(IngestionController);
   });
