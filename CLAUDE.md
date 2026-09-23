@@ -144,7 +144,9 @@ a provider's name, path, header or error text into `IngestionService`, `CitiesSe
 the client, the seam is being bypassed.
 
 ### Backend (NestJS + Prisma)
-- Feature modules; all endpoints behind `JwtAuthGuard` except `GET /config`.
+- Feature modules. **Auth is default-deny:** `JwtAuthGuard` is an `APP_GUARD`, so a route
+  is closed unless it says otherwise and a new controller needs nothing. Exactly two routes
+  open themselves with `@Public()` — `GET /config` and `POST /auth/login`.
 - **`IngestionService`** — cron plus manual triggers. Plans a run as city-months and
   upserts every returned day on `(cityId, date)`. Holds no knowledge of any source.
 - **Collection runs** — every trigger records an `IngestionRun` and updates counters unit
@@ -233,6 +235,18 @@ IngestionRun (standalone — one collection run and its progress counters)
   (`prisma/prisma-errors.ts`), mapping it to whatever the checked path would have said —
   `409` for a second collection run, the same `400` for a duplicate city slug. A pre-flight
   check may stay for its better message, but it is never the guarantee.
+- **Auth is decided by the default, not by the controller.** `JwtAuthGuard` is registered
+  as an `APP_GUARD` in `app.module.ts`, so a new controller is closed on arrival and needs
+  no decorator. Opening a route takes `@Public()` (`auth/public.decorator.ts`) and a comment
+  saying why; there are two, and `POST /auth/login` is not one of them for convenience — it
+  is where tokens come from, and guarding it leaves no way to obtain the token it then
+  demands. Guards stack across scopes rather than replace one another, so the method-level
+  `@UseGuards(DevToolsGuard)` on the delete routes runs *after* the global check, not
+  instead of it. The regression to watch for: adding `@UseGuards(JwtAuthGuard)` back to a
+  controller will look like an improvement to whoever writes it, and is really the codebase
+  going back to claiming auth lives in four places. `app.module.spec.ts` boots the real
+  `AppModule` and is where that claim is settled; `auth/public-routes.spec.ts` fails by name
+  if a third route is ever opened.
 - **Validation** — `class-validator` DTOs; the global `ValidationPipe` keeps
   `whitelist: true` and `forbidNonWhitelisted: true`.
 - **Security** — `helmet` stays active; CORS origins come from `FRONTEND_URL`.

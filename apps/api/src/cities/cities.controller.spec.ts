@@ -1,8 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { CanActivate } from '@nestjs/common';
 import { CitiesController } from './cities.controller';
 import { CitiesService } from './cities.service';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 describe('CitiesController', () => {
   let controller: CitiesController;
@@ -11,15 +9,12 @@ describe('CitiesController', () => {
   beforeEach(async () => {
     citiesService = { findAll: jest.fn(), create: jest.fn() };
 
-    const mockGuard: CanActivate = { canActivate: () => true };
-
+    // No guard to stand in for: the controller declares none, because the
+    // application's default is deny. app.module.spec.ts is what proves it.
     const module: TestingModule = await Test.createTestingModule({
       controllers: [CitiesController],
       providers: [{ provide: CitiesService, useValue: citiesService }],
-    })
-      .overrideGuard(JwtAuthGuard)
-      .useValue(mockGuard)
-      .compile();
+    }).compile();
 
     controller = module.get<CitiesController>(CitiesController);
   });

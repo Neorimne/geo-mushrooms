@@ -7,15 +7,12 @@ import {
   Param,
   ParseIntPipe,
   Post,
-  UseGuards,
 } from '@nestjs/common';
 import { IngestionService } from './ingestion.service';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { IngestionRunDto } from './dto/ingestion-run.dto';
 
 // A run takes minutes, so the trigger endpoints only record it and return its id;
 // the client follows along through the two `runs` endpoints below.
-@UseGuards(JwtAuthGuard)
 @Controller('ingestion')
 export class IngestionController {
   private readonly logger = new Logger(IngestionController.name);
