@@ -606,9 +606,9 @@ export class IngestionService implements OnModuleInit {
     const remaining: CityPlan[] = [];
     let lastError: unknown = null;
 
-    // The page path shares the data endpoint's rate-limit budget, so these
-    // fetches are paced like any other request — including the retries after a
-    // city's page fails, which used to go out back to back.
+    // A handshake is a request like any other and draws on the same rate
+    // limit, so these are paced too — including the retries after a city's
+    // handshake fails, which used to go out back to back.
     let requested = false;
     const paceRequest = async () => {
       if (requested) await this.delay(REQUEST_DELAY_MS);
@@ -797,7 +797,7 @@ export class IngestionService implements OnModuleInit {
         city.slug,
       );
     } catch (error) {
-      // Both of these say something about the source, not about this city.
+      // All three say something about the source, not about this city.
       if (error instanceof RateLimitError) throw error;
       if (error instanceof KeyExtractionError) throw error;
       if (error instanceof PayloadShapeError) throw error;

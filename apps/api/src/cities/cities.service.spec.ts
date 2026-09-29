@@ -157,7 +157,7 @@ describe('CitiesService', () => {
       expect(result).toEqual(mockCity);
       expect(areasService.findById).toHaveBeenCalledWith(1);
       // The id comes free with validation — storing it now saves the first run
-      // a page fetch it might not get past the rate limit.
+      // a lookup it might not get past the rate limit.
       expect(prismaService.city.create).toHaveBeenCalledWith({
         data: {
           name: 'Pietralta',

@@ -44,8 +44,8 @@ export const ARCHIVE_PROVIDER = Symbol('ARCHIVE_PROVIDER');
  * Whatever a provider needs to hold for the length of one run, opaque to the
  * run itself.
  *
- * A source that authenticates per run — one that reads a rotating key out of a
- * page, say — keeps it here. Threading such a value through the run loop as a
+ * A source that authenticates per run — one that hands out a rotating key
+ * before it will serve data, say — keeps it here. Threading such a value through the run loop as a
  * bare `string` would put one source's implementation detail in the signature of
  * every collection step, and leave a source without a handshake nothing honest
  * to pass. Anything source-specific belongs behind this type.
@@ -60,7 +60,7 @@ export interface ArchiveProvider {
   readonly id: string;
 
   /**
-   * Per-run handshake, performed against one city's page. Returns the session
+   * Per-run handshake, performed against one city. Returns the session
    * every later call in the run passes back, plus that city's locality id,
    * which the handshake yields for free.
    *
