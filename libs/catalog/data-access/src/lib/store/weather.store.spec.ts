@@ -21,9 +21,9 @@ type ApiMock = Record<
   | 'upsertNote'
   | 'deleteNote'
   | 'getLatestRun'
-  | 'scrapeNow'
-  | 'scrapeCity'
-  | 'scrapeRegion'
+  | 'collectAll'
+  | 'collectCity'
+  | 'collectRegion'
   | 'backfillSeason'
   | 'createCity',
   jest.Mock
@@ -108,9 +108,9 @@ describe('WeatherStore', () => {
       upsertNote: jest.fn(),
       deleteNote: jest.fn(),
       getLatestRun: jest.fn().mockReturnValue(of(null)),
-      scrapeNow: jest.fn().mockReturnValue(of(runningRun)),
-      scrapeCity: jest.fn().mockReturnValue(of(runningRun)),
-      scrapeRegion: jest.fn().mockReturnValue(of(runningRun)),
+      collectAll: jest.fn().mockReturnValue(of(runningRun)),
+      collectCity: jest.fn().mockReturnValue(of(runningRun)),
+      collectRegion: jest.fn().mockReturnValue(of(runningRun)),
       backfillSeason: jest.fn().mockReturnValue(of(runningRun)),
       createCity: jest.fn(),
     };
@@ -424,7 +424,7 @@ describe('WeatherStore', () => {
     });
 
     it('adopts the run returned by a trigger without waiting for a poll', () => {
-      store.scrapeNow();
+      store.collectAll();
 
       expect(store.activeRun()).toEqual(runningRun);
       expect(store.runProgressPercent()).toBe(0);
@@ -438,7 +438,7 @@ describe('WeatherStore', () => {
     });
 
     it('tracks progress reported by the poll', async () => {
-      store.scrapeCity(3);
+      store.collectCity(3);
       apiService.getLatestRun.mockReturnValue(
         of({ ...runningRun, processed: 2, currentCity: 'City C' }),
       );
@@ -468,7 +468,7 @@ describe('WeatherStore', () => {
     });
 
     it('reports the result and reloads the list when the run completes', async () => {
-      store.scrapeNow();
+      store.collectAll();
       apiService.getSummaries.mockClear();
       apiService.getLatestRun.mockReturnValue(
         of({
@@ -490,7 +490,7 @@ describe('WeatherStore', () => {
     });
 
     it('reports a run that ended with failures as an error', async () => {
-      store.scrapeNow();
+      store.collectAll();
       apiService.getLatestRun.mockReturnValue(
         of({ ...runningRun, status: 'COMPLETED', processed: 2, failed: 1, currentCity: null }),
       );
@@ -503,7 +503,7 @@ describe('WeatherStore', () => {
 
     it('surfaces the reason a run was aborted', async () => {
       // A rate limit or a rotated key ends the run with a message meant to be read.
-      store.scrapeNow();
+      store.collectAll();
       apiService.getLatestRun.mockReturnValue(
         of({
           ...runningRun,
@@ -534,7 +534,7 @@ describe('WeatherStore', () => {
     });
 
     it('stops polling once the run is over', async () => {
-      store.scrapeNow();
+      store.collectAll();
       apiService.getLatestRun.mockReturnValue(
         of({ ...runningRun, status: 'COMPLETED', processed: 3, currentCity: null }),
       );

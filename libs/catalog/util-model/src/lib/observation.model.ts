@@ -59,7 +59,7 @@ export interface Observation {
   zeroThermalM: number | null;
   snowLineM: number | null;
 
-  conditionText: string | null; // Italian, e.g. 'rovesci e schiarite'
+  conditionText: string | null; // short description of the day, e.g. 'light rain'
   symbolId: number | null;
 
   fetchedAt: string;

@@ -14,7 +14,7 @@ describe('CitiesService', () => {
     city: { findMany: jest.Mock; findUnique: jest.Mock; create: jest.Mock };
   };
   let areasService: { findById: jest.Mock; findOrCreateByName: jest.Mock };
-  let scraperService: { startCityRun: jest.Mock };
+  let ingestionService: { startCityRun: jest.Mock };
   let archiveClient: { resolveLocality: jest.Mock };
 
   beforeEach(async () => {
@@ -31,7 +31,7 @@ describe('CitiesService', () => {
       findOrCreateByName: jest.fn(),
     };
 
-    scraperService = {
+    ingestionService = {
       startCityRun: jest.fn().mockResolvedValue({ id: 1 }),
     };
 
@@ -44,7 +44,7 @@ describe('CitiesService', () => {
         CitiesService,
         { provide: PrismaService, useValue: prismaService },
         { provide: AreasService, useValue: areasService },
-        { provide: IngestionService, useValue: scraperService },
+        { provide: IngestionService, useValue: ingestionService },
         { provide: ARCHIVE_PROVIDER, useValue: archiveClient },
       ],
     }).compile();
@@ -168,10 +168,10 @@ describe('CitiesService', () => {
         },
         include: { area: true },
       });
-      expect(scraperService.startCityRun).toHaveBeenCalledWith(5, 'CITY_CREATED');
+      expect(ingestionService.startCityRun).toHaveBeenCalledWith(5, 'CITY_CREATED');
     });
 
-    it('creates a city in a brand new area and triggers a scrape', async () => {
+    it('creates a city in a brand new area and triggers a collection run', async () => {
       const mockCity = { id: 6, name: 'Canazei', slug: 'canazei', areaId: 2, area: { id: 2, name: 'Trentino' } };
       prismaService.city.findUnique.mockResolvedValue(null);
       archiveClient.resolveLocality.mockResolvedValue(1234);
@@ -192,7 +192,7 @@ describe('CitiesService', () => {
         },
         include: { area: true },
       });
-      expect(scraperService.startCityRun).toHaveBeenCalledWith(6, 'CITY_CREATED');
+      expect(ingestionService.startCityRun).toHaveBeenCalledWith(6, 'CITY_CREATED');
     });
   });
 });
