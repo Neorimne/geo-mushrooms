@@ -1,9 +1,15 @@
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { newestArchiveDayUtc } from '@geo/shared/util-archive';
+// The one place besides `ingestion.module.ts` that names a source, on purpose.
+// The demo dataset is the synthetic source's own output — invented towns that
+// only it knows — so it cannot be written through `ArchiveProvider` without
+// pretending the seed would mean something for a network-backed source. It
+// would not: a real archive ships no demo. `apps/api/eslint.config.mjs` lists
+// this file by name, so a third importer fails lint.
 import {
   elevationFor,
   localityIdFor,
-  newestPublishedDay,
 } from '../ingestion/sources/synthetic/synthetic.provider';
 import { generateDay } from '../ingestion/sources/synthetic/weather-generator';
 
@@ -163,7 +169,7 @@ async function seedObservations(
   cities: { id: number; slug: string }[],
   log: (m: string) => void,
 ) {
-  const edge = newestPublishedDay();
+  const edge = newestArchiveDayUtc();
   let written = 0;
 
   for (const city of cities) {
