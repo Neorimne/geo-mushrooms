@@ -36,15 +36,15 @@ export class WeatherApiService {
     );
   }
 
-  scrapeNow() {
+  collectAll() {
     return this.http.post<IngestionRun>(`${this.apiUrl}/ingestion/runs`, null);
   }
 
-  scrapeCity(cityId: number) {
+  collectCity(cityId: number) {
     return this.http.post<IngestionRun>(`${this.apiUrl}/ingestion/runs/city/${cityId}`, null);
   }
 
-  scrapeRegion(areaId: number) {
+  collectRegion(areaId: number) {
     return this.http.post<IngestionRun>(`${this.apiUrl}/ingestion/runs/region/${areaId}`, null);
   }
 

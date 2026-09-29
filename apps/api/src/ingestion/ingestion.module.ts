@@ -8,9 +8,11 @@ import { SyntheticArchiveProvider } from './sources/synthetic/synthetic.provider
 // keeps the dependency one-way (cities -> ingestion) and the graph acyclic.
 @Module({
   controllers: [IngestionController],
-  // The adapter is named in exactly one place. Pointing this line at a
+  // The run's adapter is chosen in exactly one place. Pointing this line at a
   // network-backed provider is the whole of what it takes to read a real
-  // archive instead of a generated one.
+  // archive instead of a generated one. (The demo seed also names the
+  // synthetic source, deliberately; the lint rule in `apps/api/eslint.config.mjs`
+  // allows these two files and no others.)
   providers: [
     IngestionService,
     { provide: ARCHIVE_PROVIDER, useClass: SyntheticArchiveProvider },

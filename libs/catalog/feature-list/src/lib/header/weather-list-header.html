@@ -22,10 +22,10 @@
                         @if (themeService.isDarkMode()) { 🌞 } @else { 🌙 }
                     </button>
                     @if (authStore.isAuthenticated()) {
-                    <button (click)="scrapeNow()"
+                    <button (click)="collectAll()"
                         [disabled]="store.activeRun()"
                         class="p-2 rounded-full hover:bg-amber-50 dark:hover:bg-amber-900/20 text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-slate-400"
-                        [title]="scrapeNowTitle()"
+                        [title]="collectAllTitle()"
                         aria-label="Collect all">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />

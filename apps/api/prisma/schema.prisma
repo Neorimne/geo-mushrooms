@@ -64,8 +64,8 @@ model City {
 // us the whole day. `date` is the observed day, always built as
 // `new Date('YYYY-MM-DDT00:00:00.000Z')` and serialised back with
 // `toISOString().slice(0, 10)` — @db.Date keeps it free of timezone drift.
-// The archive covers up to D-3: the source withholds its last two days
-// while its meteorologists validate them.
+// The archive covers up to D-3: a daily archive withholds its last two days
+// while they are validated.
 model DailyObservation {
   id Int @id @default(autoincrement())
 

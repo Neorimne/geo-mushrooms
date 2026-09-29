@@ -143,6 +143,16 @@ with a rate limit and mean nothing to one without.
 a provider's name, path, header or error text into `IngestionService`, `CitiesService` or
 the client, the seam is being bypassed.
 
+The import half of that rule is linted. `no-restricted-imports` in
+`apps/api/eslint.config.mjs` lets exactly two files reach into `sources/`:
+`ingestion.module.ts`, whose `useClass` line chooses the adapter, and `seed/demo-data.ts`,
+because the demo dataset *is* the synthetic source's output — invented towns no other source
+knows. A third importer is a design decision, not a lint error to silence. The prose half
+cannot be linted without a denylist that would itself name the source, so it rests on
+review: the shared files — `archive-provider.ts`, `archive.errors.ts`,
+`ingestion.constants.ts` — say what the run relies on, never where it was learned. The
+same goes for words: the client starts a *collection run*; nothing here scrapes.
+
 ### Backend (NestJS + Prisma)
 - Feature modules. **Auth is default-deny:** `JwtAuthGuard` is an `APP_GUARD`, so a route
   is closed unless it says otherwise and a new controller needs nothing. Exactly two routes

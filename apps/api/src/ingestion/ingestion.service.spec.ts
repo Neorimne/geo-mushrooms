@@ -856,10 +856,10 @@ describe('IngestionService', () => {
       });
     });
 
-    it("paces the retry when the first city's page fails, instead of bursting", async () => {
-      // The page path shares the rate-limit budget, so falling through to the
-      // next city must not fire its request immediately — a burst of page
-      // fetches is what trips the limit in the first place.
+    it("paces the retry when the first city's handshake fails, instead of bursting", async () => {
+      // A handshake draws on the same rate limit as a month, so falling through
+      // to the next city must not fire its request immediately — a burst of
+      // handshakes is what trips the limit in the first place.
       jest.useFakeTimers();
       jest.setSystemTime(new Date('2026-08-20T09:00:00.000Z'));
       prismaService.city.findMany.mockResolvedValue([
@@ -883,14 +883,15 @@ describe('IngestionService', () => {
     });
 
     it('fails the whole run loudly when the handshake can no longer be read', async () => {
-      // Key rotation must never look like a quiet zero-row collection.
+      // A handshake that stops working must never look like a quiet zero-row
+      // collection.
       jest.useFakeTimers();
       prismaService.city.findMany.mockResolvedValue([
         city(1, 'Alpha'),
         city(2, 'Beta'),
       ]);
       archive.openSession.mockRejectedValue(
-        new KeyExtractionError('no key in page'),
+        new KeyExtractionError('no session key in the response'),
       );
 
       await service.startFullRun();

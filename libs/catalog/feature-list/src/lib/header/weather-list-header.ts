@@ -39,12 +39,12 @@ export class WeatherListHeader {
     this.store.loadSummaries();
   }
 
-  scrapeNow() {
+  collectAll() {
     const confirmed = window.confirm(
       'The current month will be refreshed for every city. Days already stored are overwritten with the archive\'s current values. Continue?'
     );
     if (confirmed) {
-      this.store.scrapeNow();
+      this.store.collectAll();
     }
   }
 
@@ -65,7 +65,7 @@ export class WeatherListHeader {
   }
 
   /** Tooltip for the collect buttons — explains why they are disabled mid-run. */
-  scrapeNowTitle(): string {
+  collectAllTitle(): string {
     return this.store.activeRun()
       ? 'A run is already in progress'
       : 'Collect data for every city';

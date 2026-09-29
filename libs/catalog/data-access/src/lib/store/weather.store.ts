@@ -411,9 +411,9 @@ export const WeatherStore = signalStore(
 
     return {
       pollActiveRun,
-      scrapeNow: startRun<void>(() => apiService.scrapeNow()),
-      scrapeCity: startRun<number>((cityId) => apiService.scrapeCity(cityId)),
-      scrapeRegion: startRun<number>((areaId) => apiService.scrapeRegion(areaId)),
+      collectAll: startRun<void>(() => apiService.collectAll()),
+      collectCity: startRun<number>((cityId) => apiService.collectCity(cityId)),
+      collectRegion: startRun<number>((areaId) => apiService.collectRegion(areaId)),
       backfillSeason: startRun<void>(() => apiService.backfillSeason()),
       createCity: rxMethod<{ name: string; slug: string; areaId?: number | string | null; areaName?: string }>(
         pipe(

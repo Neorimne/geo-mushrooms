@@ -71,7 +71,7 @@ describe('WeatherListComponent', () => {
     getConfig: jest.Mock;
     getAreas: jest.Mock;
     getLatestRun: jest.Mock;
-    scrapeRegion: jest.Mock;
+    collectRegion: jest.Mock;
     backfillSeason: jest.Mock;
     createCity: jest.Mock;
   };
@@ -90,7 +90,7 @@ describe('WeatherListComponent', () => {
       getConfig: jest.fn().mockReturnValue(of({ devToolsEnabled: false })),
       getAreas: jest.fn().mockReturnValue(of([])),
       getLatestRun: jest.fn().mockReturnValue(of(null)),
-      scrapeRegion: jest.fn().mockReturnValue(of(runningRun)),
+      collectRegion: jest.fn().mockReturnValue(of(runningRun)),
       backfillSeason: jest.fn().mockReturnValue(of(runningRun)),
       createCity: jest.fn().mockReturnValue(of({})),
     };
@@ -142,7 +142,7 @@ describe('WeatherListComponent', () => {
   it('shows scope, counters and current unit once a run starts', () => {
     fixture.detectChanges();
 
-    component.store.scrapeRegion(7);
+    component.store.collectRegion(7);
     fixture.detectChanges();
 
     const strip = progressStrip();
@@ -177,12 +177,12 @@ describe('WeatherListComponent', () => {
   });
 
   it('counts failures towards progress', () => {
-    apiService.scrapeRegion.mockReturnValue(
+    apiService.collectRegion.mockReturnValue(
       of({ ...runningRun, processed: 1, failed: 1 }),
     );
     fixture.detectChanges();
 
-    component.store.scrapeRegion(7);
+    component.store.collectRegion(7);
     fixture.detectChanges();
 
     expect(progressStrip()?.textContent).toContain('2 / 4');
@@ -192,7 +192,7 @@ describe('WeatherListComponent', () => {
 
   it('stops showing progress once the run leaves RUNNING', async () => {
     fixture.detectChanges();
-    component.store.scrapeRegion(7);
+    component.store.collectRegion(7);
     fixture.detectChanges();
     expect(progressStrip()).not.toBeNull();
 
@@ -207,7 +207,7 @@ describe('WeatherListComponent', () => {
   });
 
   it('has one filter select now that days are no longer picked by hand', () => {
-    // The old date filter listed free-form Italian date strings; observations
+    // The old date filter listed free-form date strings; observations
     // are keyed by a real date and browsed on the city page instead.
     fixture.detectChanges();
 

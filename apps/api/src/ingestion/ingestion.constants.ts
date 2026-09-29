@@ -27,22 +27,23 @@ export type IngestionStatus =
  * Pause between cities so the source does not rate-limit us. Applied *between*
  * cities only, never after the last one.
  *
- * The source's rate limit is enforced at the CDN edge and scoped to our IP, so
- * every request the whole app makes shares one budget. Slow is the point.
+ * Assume the budget is shared: a source that limits by client address counts
+ * every request the whole app makes against one allowance, whichever city it
+ * is for. Slow is the point.
  */
 export const REQUEST_DELAY_MS = 45_000;
 
 /**
  * Pause between month requests *within* one city. Shorter than the inter-city
- * gap because a season backfill is six of these back to back, but still far
- * slower than the burst that first tripped the limit during discovery.
+ * gap because a season backfill is six of these back to back, but still slow:
+ * a burst of month requests is exactly what a rate limit exists to stop.
  */
 export const MONTH_REQUEST_DELAY_MS = 15_000;
 
 /**
- * How long to sit out after the source rate-limits us. Error 1015 expires on
- * its own; the cooldown observed during discovery was well over 15 minutes, so
- * this is a single polite retry, not a way to wait the limit out.
+ * How long to sit out after the source rate-limits us. A limit expires on its
+ * own, but can take far longer than this to do so, so this is a single polite
+ * retry, not a way to wait the limit out.
  */
 export const RATE_LIMIT_BACKOFF_MS = 5 * 60_000;
 

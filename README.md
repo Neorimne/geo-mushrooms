@@ -156,9 +156,11 @@ Three things make the seam hold, and each is easy to undo by accident:
   The run reacts to them by name to choose between backing off, aborting, and failing a
   single city-month, so they belong to the contract rather than to any adapter.
 
-The adapter is named in exactly one place — the `useClass` line in
+The adapter is chosen in exactly one place — the `useClass` line in
 [`ingestion.module.ts`](apps/api/src/ingestion/ingestion.module.ts). Nothing outside
-`ingestion/sources/<name>/` may name a source.
+`ingestion/sources/<name>/` may name a source, and lint holds the code to it: besides that
+module, only the demo seed may import from `sources/`, because the demo dataset is the
+synthetic source's own output.
 
 ---
 

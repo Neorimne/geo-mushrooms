@@ -9,7 +9,7 @@ import { CitySummaryCardComponent } from '@geo/catalog/ui-card';
 import { WeatherListHeader } from './header/weather-list-header';
 import { AuthStore } from '@geo/auth/data-access';
 
-interface PendingScrape {
+interface PendingCollection {
   type: 'city' | 'region';
   id: number;
   name: string;
@@ -44,7 +44,7 @@ export class WeatherListComponent implements OnInit {
     return `${count} ${count === 1 ? 'city' : 'cities'}`;
   }
 
-  pendingScrape = signal<PendingScrape | null>(null);
+  pendingCollection = signal<PendingCollection | null>(null);
   pendingDelete = signal<PendingDelete | null>(null);
 
   ngOnInit() {
@@ -58,27 +58,27 @@ export class WeatherListComponent implements OnInit {
     this.router.navigate(['city', cityId]);
   }
 
-  requestScrapeCity(cityId: number, cityName: string) {
-    this.pendingScrape.set({ type: 'city', id: cityId, name: cityName });
+  requestCollectCity(cityId: number, cityName: string) {
+    this.pendingCollection.set({ type: 'city', id: cityId, name: cityName });
   }
 
-  requestScrapeRegion(areaId: number, areaName: string, cityCount: number) {
-    this.pendingScrape.set({ type: 'region', id: areaId, name: areaName, cityCount });
+  requestCollectRegion(areaId: number, areaName: string, cityCount: number) {
+    this.pendingCollection.set({ type: 'region', id: areaId, name: areaName, cityCount });
   }
 
-  confirmScrape() {
-    const action = this.pendingScrape();
+  confirmCollection() {
+    const action = this.pendingCollection();
     if (!action) return;
     if (action.type === 'city') {
-      this.store.scrapeCity(action.id);
+      this.store.collectCity(action.id);
     } else {
-      this.store.scrapeRegion(action.id);
+      this.store.collectRegion(action.id);
     }
-    this.pendingScrape.set(null);
+    this.pendingCollection.set(null);
   }
 
-  cancelScrape() {
-    this.pendingScrape.set(null);
+  cancelCollection() {
+    this.pendingCollection.set(null);
   }
 
   requestDeleteCity(cityId: number, cityName: string) {

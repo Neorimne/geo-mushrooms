@@ -33,7 +33,7 @@
           <!-- Right: collect region (auth-gated) + chevron -->
           <div class="flex items-center gap-1 shrink-0">
             @if (authStore.isAuthenticated()) {
-              <button (click)="requestScrapeRegion(area.areaId, area.name, area.cities.length)"
+              <button (click)="requestCollectRegion(area.areaId, area.name, area.cities.length)"
                 [disabled]="store.activeRun()"
                 class="p-1.5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors disabled:opacity-40 disabled:hover:text-slate-400 disabled:hover:bg-transparent"
                 title="Collect data for this region">
@@ -81,7 +81,7 @@
                 <span class="truncate">{{ city.city.name }}</span>
               </h3>
               @if (authStore.isAuthenticated()) {
-                <button (click)="requestScrapeCity(city.city.id, city.city.name)"
+                <button (click)="requestCollectCity(city.city.id, city.city.name)"
                   [disabled]="store.activeRun()"
                   class="p-1 rounded-sm text-slate-300 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors disabled:opacity-40 disabled:hover:text-slate-300 disabled:hover:bg-transparent"
                   title="Collect data for this city">
@@ -120,7 +120,7 @@
   </main>
 
   <!-- Collect Confirmation Modal -->
-  @if (pendingScrape()) {
+  @if (pendingCollection()) {
   <div class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
     <div class="w-full max-w-sm bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl p-6 text-slate-800 dark:text-slate-100
                 animate-in fade-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 duration-200">
@@ -136,10 +136,10 @@
         <div>
           <h3 class="font-bold text-base">Confirm data collection</h3>
           <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            @if (pendingScrape()!.type === 'city') {
-              The current month will be refreshed for <span class="font-semibold text-slate-700 dark:text-slate-200">{{ pendingScrape()!.name }}</span>. Days already stored are overwritten with the archive&#39;s current values.
+            @if (pendingCollection()!.type === 'city') {
+              The current month will be refreshed for <span class="font-semibold text-slate-700 dark:text-slate-200">{{ pendingCollection()!.name }}</span>. Days already stored are overwritten with the archive&#39;s current values.
             } @else {
-              The current month will be refreshed for every city in <span class="font-semibold text-slate-700 dark:text-slate-200">{{ pendingScrape()!.name }}</span> ({{ citiesLabel(pendingScrape()!.cityCount ?? 0) }}).
+              The current month will be refreshed for every city in <span class="font-semibold text-slate-700 dark:text-slate-200">{{ pendingCollection()!.name }}</span> ({{ citiesLabel(pendingCollection()!.cityCount ?? 0) }}).
               <br />
               Cities are collected one at a time, with pauses between them — progress appears in the header.
             }
@@ -149,11 +149,11 @@
 
       <!-- Actions -->
       <div class="flex gap-3 justify-end">
-        <button (click)="cancelScrape()"
+        <button (click)="cancelCollection()"
           class="px-4 py-2 text-sm font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700">
           Cancel
         </button>
-        <button (click)="confirmScrape()"
+        <button (click)="confirmCollection()"
           class="px-5 py-2 text-sm font-bold bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-colors flex items-center gap-2 shadow-md shadow-amber-500/20">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />

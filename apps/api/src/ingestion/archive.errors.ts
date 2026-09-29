@@ -1,13 +1,14 @@
 /**
  * Failures the source can hand us, split by what the run should do about them.
  * They are deliberately distinct classes rather than status codes: the run loop
- * reacts very differently to "slow down" than to "the page changed shape".
+ * reacts very differently to "slow down" than to "the source changed shape".
  */
 
 /**
- * The `/storico` page loaded but no longer contains the obfuscation key or the
- * locality id. The key is versioned and *will* rotate — when it does, this is
- * the loud alarm that stops the run, instead of a silent month of zero rows.
+ * The source answered, but what a provider reads from it to open a session —
+ * a per-run key, a locality id — is no longer there. A handshake can change
+ * under a provider without notice; when it does, this is the loud alarm that
+ * stops the run, instead of a silent month of zero rows.
  */
 export class KeyExtractionError extends Error {
   constructor(message: string) {
@@ -17,8 +18,8 @@ export class KeyExtractionError extends Error {
 }
 
 /**
- * Cloudflare edge rate limiting (HTTP 429, error 1015). IP-scoped and
- * self-expiring — not a ban. Back off and retry; never count it as a city that
+ * The source is refusing requests for arriving too fast. It expires on its
+ * own — a pause, not a ban. Back off and retry; never count it as a city that
  * failed to collect.
  */
 export class RateLimitError extends Error {
@@ -40,8 +41,8 @@ export class SourceHttpError extends Error {
 }
 
 /**
- * The archive answered, but not with the free-tier envelope we know how to
- * read. Systemic rather than per-day, so it aborts the run.
+ * The archive answered, but not in the shape the provider knows how to read.
+ * Systemic rather than per-day, so it aborts the run.
  */
 export class PayloadShapeError extends Error {
   constructor(message: string) {
