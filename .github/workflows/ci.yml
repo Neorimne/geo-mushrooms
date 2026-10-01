@@ -74,3 +74,34 @@ jobs:
           name: playwright-report
           path: dist/.playwright
           retention-days: 7
+
+  stack:
+    name: Stack smoke test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # The README's path, verbatim: the only thing that proves migrations,
+      # the seed, nginx and main.ts work together, and that a clone runs.
+      - run: cp .env.example .env
+
+      # Started first: the image build is the slow part, and the host install
+      # below overlaps with the backend migrating and seeding.
+      - run: docker compose up -d --build
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # Same npm pin as the verify job — see the note there.
+      - run: npm install -g npm@11
+
+      - run: npm ci
+
+      - run: npx nx e2e api-e2e
+
+      - name: Stack logs
+        if: ${{ failure() }}
+        run: docker compose logs
