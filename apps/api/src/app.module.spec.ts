@@ -7,6 +7,7 @@ import { Request } from 'express';
 import { AddressInfo } from 'node:net';
 import * as bcrypt from 'bcrypt';
 import { AppModule } from './app.module';
+import { configureApp } from './configure-app';
 import { PrismaService } from './prisma/prisma.service';
 import { Public } from './auth/public.decorator';
 
@@ -22,12 +23,8 @@ import { Public } from './auth/public.decorator';
  * added next week will look like — and it is closed anyway. That is the whole
  * claim, and it is not provable anywhere but here.
  *
- * Note what this spec does NOT set up: the global `ValidationPipe`, `helmet`
- * and CORS all live in `main.ts` and are not applied here. This is a test of
- * module wiring and guards, not of bootstrap. (One visible consequence: with no
- * `ValidationPipe`, a malformed login body reaches the handler and answers 401
- * `Invalid credentials` rather than 400 — which is why the login case below
- * sends real credentials and expects a real token.)
+ * It applies `configureApp` exactly as `bootstrap()` does, so the pipes, helmet
+ * and CORS under test are the ones that ship.
  */
 
 // Must beat `SeedService.onModuleInit`, which is on by default in the local
@@ -37,6 +34,7 @@ import { Public } from './auth/public.decorator';
 process.env.SEED_DEMO_DATA = 'false';
 // `JwtModule.registerAsync` throws at boot without this, and CI has no `.env`.
 process.env.JWT_SECRET = 'default-deny-spec-secret';
+process.env.FRONTEND_URL = 'http://client.probe.test';
 
 const ADMIN = { id: 1, email: 'admin@probe.test', password: 'probe-password' };
 
@@ -108,6 +106,7 @@ describe('AppModule — default-deny auth', () => {
       .compile();
 
     app = moduleRef.createNestApplication();
+    configureApp(app);
     // Port 0 for an ephemeral port: no collision with a running `nx serve api`
     // or with a parallel jest worker. The port is read off the server because
     // `app.getUrl()` answers `http://[::1]:PORT` on some hosts.
@@ -173,6 +172,36 @@ describe('AppModule — default-deny auth', () => {
       });
 
       expect(res.status).toBe(401);
+    });
+  });
+
+  // What `configureApp` adds on top of the module. Without these the spec would
+  // boot a different application from the one that ships.
+  describe('the bootstrap pipeline', () => {
+    it('rejects a body with fields the DTO does not declare', async () => {
+      const res = await fetch(`${base}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...ADMIN, isAdmin: true }),
+      });
+
+      expect(res.status).toBe(400);
+    });
+
+    it('sends the helmet headers', async () => {
+      const res = await get('/config');
+
+      expect(res.headers.get('x-content-type-options')).toBe('nosniff');
+    });
+
+    it('allows the configured origin', async () => {
+      const res = await fetch(`${base}/config`, {
+        headers: { Origin: 'http://client.probe.test' },
+      });
+
+      expect(res.headers.get('access-control-allow-origin')).toBe(
+        'http://client.probe.test',
+      );
     });
   });
 

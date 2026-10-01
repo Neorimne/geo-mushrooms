@@ -1,13 +1,23 @@
-import { waitForPortOpen } from '@nx/node/utils';
+import { apiBaseUrl } from './base-url';
 
+const READY_TIMEOUT_MS = 120_000;
+
+/**
+ * Waits for the API to answer rather than for a port to open: nginx listens
+ * long before the backend has migrated and seeded, and a 502 is not a stack
+ * that is up.
+ */
 module.exports = async function () {
-  // Start services that that the app needs to run (e.g. database, docker-compose, etc.).
-  console.log('\nSetting up...\n');
+  const url = `${apiBaseUrl()}/config`;
+  const deadline = Date.now() + READY_TIMEOUT_MS;
 
-  const host = process.env.HOST ?? 'localhost';
-  const port = process.env.PORT ? Number(process.env.PORT) : 3000;
-  await waitForPortOpen(port, { host });
+  while (Date.now() < deadline) {
+    const ok = await fetch(url)
+      .then((res) => res.ok)
+      .catch(() => false);
+    if (ok) return;
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+  }
 
-  // Hint: Use `globalThis` to pass variables to global teardown.
-  globalThis.__TEARDOWN_MESSAGE__ = '\nTearing down...\n';
+  throw new Error(`No API at ${url} after ${READY_TIMEOUT_MS / 1000}s — is the stack up?`);
 };

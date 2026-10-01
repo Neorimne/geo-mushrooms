@@ -52,7 +52,7 @@ npx nx serve client       # Angular frontend (http://localhost:4200)
 npx nx run-many -t test                 # unit tests, all projects
 npx nx test <project>                   # e.g. api, ui-chart, catalog-data-access
 npx nx e2e client-e2e                   # Playwright, hermetic
-npx nx e2e api-e2e                      # smoke test — needs the stack running
+npx nx e2e api-e2e                      # smoke test against the compose stack (API_BASE_URL)
 npx nx run-many -t lint
 ```
 
@@ -75,7 +75,7 @@ docker compose down -v                  # nuclear reset (deletes data, reseeds o
 ```
 apps/
   api/           NestJS backend
-  api-e2e/       Smoke tests against a running stack (not in CI)
+  api-e2e/       Smoke tests against the compose stack (CI brings it up)
   client/        Angular 22 frontend
   client-e2e/    Playwright E2E (hermetic — route interception, no backend)
 libs/
