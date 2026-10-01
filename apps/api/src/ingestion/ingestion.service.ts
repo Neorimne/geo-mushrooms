@@ -745,13 +745,21 @@ export class IngestionService implements OnModuleInit {
     }
   }
 
+  /**
+   * Best-effort: the cache only spares the next run a lookup, so failing to
+   * write it must not cost a city this run has already resolved.
+   */
   private async cacheLocalityId(city: City, localityId: number): Promise<void> {
     if (city.sourceLocalityId === localityId) return;
 
-    await this.prisma.city.update({
-      where: { id: city.id },
-      data: { sourceLocalityId: localityId },
-    });
+    await this.prisma.city
+      .update({
+        where: { id: city.id },
+        data: { sourceLocalityId: localityId },
+      })
+      .catch((e) =>
+        this.logger.warn(`Could not cache the locality id of ${city.name}:`, e),
+      );
   }
 
   /**
