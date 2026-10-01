@@ -236,8 +236,9 @@ IngestionRun (standalone — one collection run and its progress counters)
 - **Ingestion resilience** — every external call and every parse in a `try/catch`.
   Distinguish *systemic* failures from *per-unit* ones: `RateLimitError`,
   `KeyExtractionError` and `PayloadShapeError` must propagate; anything else costs one
-  city-month and the run carries on. A single bad field nulls that column only — never drop
-  the day.
+  city-month and the run carries on, a failed database write included. That split lives in
+  one place, `isSystemic()` in `ingestion.service.ts`; a catch site does not keep its own
+  list. A single bad field nulls that column only — never drop the day.
 - **Idempotency** — always `upsert` on `(cityId, date)`. Re-running a month must converge.
 - **Uniqueness is decided by the database, never by a prior read.** Checking whether a row
   exists and then writing it is two statements with a yield in between, so both callers can

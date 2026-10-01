@@ -17,7 +17,11 @@ import {
   RATE_LIMIT_BACKOFF_MS,
   REQUEST_DELAY_MS,
 } from './ingestion.constants';
-import { KeyExtractionError, RateLimitError } from './archive.errors';
+import {
+  KeyExtractionError,
+  PayloadShapeError,
+  RateLimitError,
+} from './archive.errors';
 
 /** The subset of `ingestion_runs` the service reads back. */
 type RunRow = {
@@ -311,6 +315,26 @@ describe('IngestionService', () => {
       );
       prismaService.city.findMany.mockResolvedValue([
         city(1, 'Broken'),
+        city(2, 'Beta'),
+      ]);
+
+      await service.startFullRun();
+      await jest.advanceTimersByTimeAsync(REQUEST_DELAY_MS);
+      await service.whenIdle();
+
+      expect(runs[0]).toMatchObject({
+        status: INGESTION_STATUS.COMPLETED,
+        processed: 1,
+        failed: 1,
+      });
+    });
+
+    it('counts a month whose days could not be stored as failed, and keeps going', async () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(MID_MONTH);
+      prismaService.$transaction.mockRejectedValueOnce(new Error('deadlock detected'));
+      prismaService.city.findMany.mockResolvedValue([
+        city(1, 'Alpha'),
         city(2, 'Beta'),
       ]);
 
@@ -856,6 +880,68 @@ describe('IngestionService', () => {
       });
     });
 
+    it('fails a city whose locality lookup throws, and keeps going', async () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(MID_MONTH);
+      prismaService.city.findMany.mockResolvedValue([
+        city(1, 'Alpha'),
+        city(2, 'Flaky', null),
+      ]);
+      archive.resolveLocality.mockRejectedValue(new Error('502 from the source'));
+
+      await service.startFullRun();
+      await jest.advanceTimersByTimeAsync(2 * REQUEST_DELAY_MS);
+      await service.whenIdle();
+
+      expect(runs[0]).toMatchObject({
+        status: INGESTION_STATUS.COMPLETED,
+        processed: 1,
+        failed: 1,
+      });
+    });
+
+    it('still fails the run when a locality lookup hits a systemic error', async () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(MID_MONTH);
+      prismaService.city.findMany.mockResolvedValue([
+        city(1, 'Alpha'),
+        city(2, 'Beta', null),
+      ]);
+      archive.resolveLocality.mockRejectedValue(
+        new KeyExtractionError('no locality id in the response'),
+      );
+
+      await service.startFullRun();
+      await jest.advanceTimersByTimeAsync(REQUEST_DELAY_MS);
+      await service.whenIdle();
+
+      expect(runs[0].status).toBe(INGESTION_STATUS.FAILED);
+      expect(runs[0].errorMessage).toContain('can no longer be read');
+      expect(archive.fetchMonth).not.toHaveBeenCalled();
+    });
+
+    it('collects every city even when the locality ids cannot be cached', async () => {
+      // The cache only saves a lookup next run; losing it must cost nothing now.
+      jest.useFakeTimers();
+      jest.setSystemTime(MID_MONTH);
+      prismaService.city.findMany.mockResolvedValue([
+        city(1, 'Alpha', null),
+        city(2, 'Beta', null),
+      ]);
+      prismaService.city.update.mockRejectedValue(new Error('connection reset'));
+
+      await service.startFullRun();
+      await jest.advanceTimersByTimeAsync(2 * REQUEST_DELAY_MS);
+      await service.whenIdle();
+
+      expect(runs[0]).toMatchObject({
+        status: INGESTION_STATUS.COMPLETED,
+        processed: 2,
+        failed: 0,
+      });
+      expect(archive.fetchMonth.mock.calls.map((c) => c[1])).toEqual([101, 2087]);
+    });
+
     it("paces the retry when the first city's handshake fails, instead of bursting", async () => {
       // A handshake draws on the same rate limit as a month, so falling through
       // to the next city must not fire its request immediately — a burst of
@@ -903,6 +989,25 @@ describe('IngestionService', () => {
       });
       expect(runs[0].errorMessage).toContain('can no longer be read');
       expect(archive.fetchMonth).not.toHaveBeenCalled();
+    });
+    it('fails the run at once when the handshake payload has an unknown shape', async () => {
+      // Every city would hit the same shape, so trying the next one only delays the alarm.
+      jest.useFakeTimers();
+      jest.setSystemTime(MID_MONTH);
+      prismaService.city.findMany.mockResolvedValue([
+        city(1, 'Alpha'),
+        city(2, 'Beta'),
+      ]);
+      archive.openSession.mockRejectedValue(
+        new PayloadShapeError('unexpected handshake payload'),
+      );
+
+      await service.startFullRun();
+      await jest.advanceTimersByTimeAsync(REQUEST_DELAY_MS);
+      await service.whenIdle();
+
+      expect(runs[0].status).toBe(INGESTION_STATUS.FAILED);
+      expect(archive.openSession).toHaveBeenCalledTimes(1);
     });
   });
 
