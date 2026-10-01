@@ -50,6 +50,19 @@ interface CityPlan {
 /** Stops the run with a message meant for the user, not a stack trace. */
 class RunAbortedError extends Error {}
 
+/**
+ * Errors that say something about the source or the run as a whole, so they
+ * abort it. Anything else is one unit's problem and costs only that unit.
+ */
+function isSystemic(error: unknown): boolean {
+  return (
+    error instanceof RateLimitError ||
+    error instanceof KeyExtractionError ||
+    error instanceof PayloadShapeError ||
+    error instanceof RunAbortedError
+  );
+}
+
 const MONTHS_SHORT = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
@@ -463,8 +476,8 @@ export class IngestionService implements OnModuleInit {
    * - a unit that could not be collected bumps `failed` and the run carries on;
    * - a rate limit is not the unit's fault, so it is retried once and then
    *   aborts the run without blaming any city;
-   * - a source that can no longer be handshaked aborts immediately, because
-   *   every remaining request would be pointless.
+   * - any other systemic error (see `isSystemic`) aborts immediately, because
+   *   every remaining request would fail the same way.
    */
   private async executeRun(runId: number, plans: CityPlan[]): Promise<void> {
     const counters = { processed: 0, failed: 0 };
@@ -593,8 +606,8 @@ export class IngestionService implements OnModuleInit {
    * locality id.
    *
    * Cities that still have no cached id get resolved too. One whose slug the
-   * source no longer knows is dropped from the plan and counted failed; the run
-   * itself carries on.
+   * source no longer knows, or whose lookup fails, is dropped from the plan and
+   * counted failed; the run itself carries on.
    */
   private async prepareRun(
     runId: number,
@@ -628,9 +641,7 @@ export class IngestionService implements OnModuleInit {
           await this.cacheLocalityId(plan.city, opened.localityId);
           remaining.push({ ...plan, city: { ...plan.city, sourceLocalityId: opened.localityId } });
         } catch (error) {
-          if (error instanceof KeyExtractionError || error instanceof RunAbortedError) {
-            throw error;
-          }
+          if (isSystemic(error)) throw error;
           this.logger.warn(
             `Could not open a source session via ${plan.city.name}: ${error instanceof Error ? error.message : String(error)}`,
           );
@@ -647,10 +658,20 @@ export class IngestionService implements OnModuleInit {
 
       // A city with no cached id needs its own lookup.
       await paceRequest();
-      const localityId = await this.withRateLimitRetry(
-        () => this.archive.resolveLocality(plan.city.slug),
-        absorbRateLimit,
-      );
+      let localityId: number | null;
+      try {
+        localityId = await this.withRateLimitRetry(
+          () => this.archive.resolveLocality(plan.city.slug),
+          absorbRateLimit,
+        );
+      } catch (error) {
+        if (isSystemic(error)) throw error;
+        this.logger.warn(
+          `Skipping ${plan.city.name}: its locality lookup failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        counters.failed += plan.months.length;
+        continue;
+      }
 
       if (localityId === null) {
         this.logger.warn(
@@ -774,9 +795,8 @@ export class IngestionService implements OnModuleInit {
   }
 
   /**
-   * Collects one city-month. Returns false when the month yielded nothing worth
-   * storing — a bad month must not abort the run. Rate limits and payload-shape
-   * failures are systemic, so they propagate.
+   * Collects one city-month. Returns false when the month could not be fetched
+   * or stored — a bad month must not abort the run. Systemic errors propagate.
    */
   private async processCityMonth(
     city: City,
@@ -788,57 +808,53 @@ export class IngestionService implements OnModuleInit {
 
     this.logger.log(`>> ${city.name} ${month.slice(0, 7)}`);
 
-    let days: ParsedDay[];
     try {
-      days = await this.archive.fetchMonth(
+      const days = await this.archive.fetchMonth(
         session,
         localityId,
         month,
         city.slug,
       );
+
+      if (days.length === 0) {
+        this.logger.warn(
+          `   ⚠️ ${city.name} ${month.slice(0, 7)}: the archive returned no days`,
+        );
+        return false;
+      }
+
+      await this.prisma.$transaction(
+        days.map((day) => {
+          const data = this.toObservationData(day);
+          return this.prisma.dailyObservation.upsert({
+            where: {
+              cityId_date: {
+                cityId: city.id,
+                date: new Date(`${day.date}T00:00:00.000Z`),
+              },
+            },
+            create: {
+              cityId: city.id,
+              date: new Date(`${day.date}T00:00:00.000Z`),
+              ...data,
+            },
+            update: data,
+          });
+        }),
+      );
+
+      this.logger.log(
+        `   💾 ${city.name} ${month.slice(0, 7)}: ${days.length} day(s)`,
+      );
+      return true;
     } catch (error) {
-      // All three say something about the source, not about this city.
-      if (error instanceof RateLimitError) throw error;
-      if (error instanceof KeyExtractionError) throw error;
-      if (error instanceof PayloadShapeError) throw error;
+      if (isSystemic(error)) throw error;
 
       this.logger.error(
         `   ❌ ${city.name} ${month.slice(0, 7)}: ${error instanceof Error ? error.message : String(error)}`,
       );
       return false;
     }
-
-    if (days.length === 0) {
-      this.logger.warn(
-        `   ⚠️ ${city.name} ${month.slice(0, 7)}: the archive returned no days`,
-      );
-      return false;
-    }
-
-    await this.prisma.$transaction(
-      days.map((day) => {
-        const data = this.toObservationData(day);
-        return this.prisma.dailyObservation.upsert({
-          where: {
-            cityId_date: {
-              cityId: city.id,
-              date: new Date(`${day.date}T00:00:00.000Z`),
-            },
-          },
-          create: {
-            cityId: city.id,
-            date: new Date(`${day.date}T00:00:00.000Z`),
-            ...data,
-          },
-          update: data,
-        });
-      }),
-    );
-
-    this.logger.log(
-      `   💾 ${city.name} ${month.slice(0, 7)}: ${days.length} day(s)`,
-    );
-    return true;
   }
 
   /** The metric columns, without the identity ones — the same shape on create and update. */
