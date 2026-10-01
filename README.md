@@ -219,12 +219,15 @@ npx prisma studio --schema=./apps/api/prisma/schema.prisma
 
 ### CI
 
-`.github/workflows/ci.yml` runs `nx run-many -t lint test build` plus the Playwright suite
-on every pull request and on every push to `master`. The E2E suite is hermetic —
-route interception stands in for the API — so CI needs no database and no backend.
+`.github/workflows/ci.yml` runs three jobs on every pull request and on every push to
+`master`: `nx run-many -t lint test build`, the Playwright suite, and a stack smoke test.
+The Playwright suite is hermetic — route interception stands in for the API. The stack job
+is the opposite: it runs `cp .env.example .env && docker compose up`, exactly as above, and
+then `apps/api-e2e` against it through nginx, so migrations, the seed and the image are
+verified on every change.
 
-`apps/api-e2e` is the exception: it smoke-tests a *running* stack, so it is run locally
-(`npx nx e2e api-e2e`, with the stack up) rather than in CI.
+Locally, `npx nx e2e api-e2e` targets the stack on `HTTP_PORT`; set `API_BASE_URL` to aim
+it elsewhere.
 
 ---
 
