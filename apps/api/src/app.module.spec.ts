@@ -37,6 +37,7 @@ import { Public } from './auth/public.decorator';
 process.env.SEED_DEMO_DATA = 'false';
 // `JwtModule.registerAsync` throws at boot without this, and CI has no `.env`.
 process.env.JWT_SECRET = 'default-deny-spec-secret';
+process.env.FRONTEND_URL = 'http://client.probe.test';
 
 const ADMIN = { id: 1, email: 'admin@probe.test', password: 'probe-password' };
 
@@ -173,6 +174,36 @@ describe('AppModule — default-deny auth', () => {
       });
 
       expect(res.status).toBe(401);
+    });
+  });
+
+  // What `main.ts` adds on top of the module. Without these the spec would boot
+  // a different application from the one that ships.
+  describe('the bootstrap pipeline', () => {
+    it('rejects a body with fields the DTO does not declare', async () => {
+      const res = await fetch(`${base}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...ADMIN, isAdmin: true }),
+      });
+
+      expect(res.status).toBe(400);
+    });
+
+    it('sends the helmet headers', async () => {
+      const res = await get('/config');
+
+      expect(res.headers.get('x-content-type-options')).toBe('nosniff');
+    });
+
+    it('allows the configured origin', async () => {
+      const res = await fetch(`${base}/config`, {
+        headers: { Origin: 'http://client.probe.test' },
+      });
+
+      expect(res.headers.get('access-control-allow-origin')).toBe(
+        'http://client.probe.test',
+      );
     });
   });
 
