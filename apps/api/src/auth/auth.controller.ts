@@ -1,4 +1,5 @@
 import { Controller, Post, Body, UnauthorizedException } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { LoginUserDto } from './dto/login-user.dto';
 import { Public } from './public.decorator';
@@ -15,6 +16,9 @@ export class AuthController {
   // one that just refused. Marked on the method so a future /auth/refresh or
   // /auth/register has to open itself deliberately.
   @Public()
+  // Five attempts a minute per client, against the global 100: room for a
+  // mistyped password, not for a list of them.
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('login')
   async login(@Body() loginUserDto: LoginUserDto) {
     const user = await this.authService.validateUser(loginUserDto.email, loginUserDto.password);

@@ -27,6 +27,9 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-geo_mushrooms}?schema=public
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
+      # nginx is the only way in (this service publishes no port), so its one
+      # hop in X-Forwarded-For is the client's real address.
+      TRUST_PROXY: ${TRUST_PROXY:-1}
       JWT_SECRET: ${JWT_SECRET}
       ADMIN_EMAIL: ${ADMIN_EMAIL}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}

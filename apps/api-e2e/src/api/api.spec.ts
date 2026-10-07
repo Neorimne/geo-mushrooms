@@ -1,4 +1,4 @@
-import { apiBaseUrl } from '../support/base-url';
+import { apiBaseUrl, appBaseUrl } from '../support/base-url';
 
 /**
  * A smoke test against the running stack (`docker compose up -d`), not a unit
@@ -84,5 +84,74 @@ describe('the seeded stack', () => {
     });
     expect(cities.status).toBe(200);
     expect(((await cities.json()) as unknown[]).length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * helmet covers the API's JSON; the document that runs the scripts is nginx's
+ * to protect. Its script policy is a `<meta>` CSP the client build hashes
+ * (`security.autoCsp`), because only the build knows the inline scripts. The
+ * header carries what a `<meta>` CSP cannot, `frame-ancestors`.
+ */
+describe('the HTML document', () => {
+  // `/city/1` is no file on disk: nginx answers it through the SPA fallback,
+  // a second pass through `location /` that must carry the headers too.
+  it.each(['/', '/city/1'])('serves %s with the security headers', async (path) => {
+    const res = await fetch(`${appBaseUrl()}${path}`);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(res.headers.get('x-frame-options')).toBe('DENY');
+    expect(res.headers.get('referrer-policy')).toBe('strict-origin-when-cross-origin');
+    expect(res.headers.get('content-security-policy')).toContain("frame-ancestors 'none'");
+  });
+
+  it('carries a script policy hashed at build time', async () => {
+    const html = await (await fetch(appBaseUrl())).text();
+
+    expect(html).toMatch(
+      /<meta http-equiv="Content-Security-Policy" content="script-src [^"]*'sha256-/,
+    );
+  });
+
+  it('does not name the nginx version', async () => {
+    const res = await fetch(appBaseUrl());
+
+    expect(res.headers.get('server')).toBe('nginx');
+  });
+
+  // The document's headers must not leak onto the API, which has helmet's.
+  // Two sources would arrive merged, as `SAMEORIGIN, DENY`.
+  it('leaves the API to helmet', async () => {
+    const res = await fetch(`${apiBaseUrl()}/config`);
+
+    expect(res.headers.get('x-frame-options')).toBe('SAMEORIGIN');
+  });
+});
+
+/**
+ * Last on purpose: it spends this host's login budget for a minute, and the
+ * seeded-login case above would fail after it. A local re-run inside that
+ * minute fails the same way.
+ */
+describe('the login limit, through nginx', () => {
+  // Every attempt claims a new address. nginx appends the one it saw and the
+  // API trusts only that hop, so no claim buys a fresh budget. Six attempts
+  // run out the five allowed even if nothing above had spent any.
+  it('cannot be reset by a forged X-Forwarded-For', async () => {
+    const statuses: number[] = [];
+    for (let i = 0; i < 6; i++) {
+      const res = await fetch(`${apiBaseUrl()}/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Forwarded-For': `198.51.100.${i}`,
+        },
+        body: JSON.stringify({ email: 'nobody@example.com', password: 'wrong-password' }),
+      });
+      statuses.push(res.status);
+    }
+
+    expect(statuses.at(-1)).toBe(429);
   });
 });

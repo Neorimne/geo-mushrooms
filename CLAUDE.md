@@ -180,7 +180,12 @@ same goes for words: the client starts a *collection run*; nothing here scrapes.
   reaped run must not be able to report itself `COMPLETED` afterwards.
 - **`SeedService`** — writes the demo dataset when `SEED_DEMO_DATA=true` *and* the database
   has no cities. Fail-closed, and never touches a database that already has data.
-- **Rate limiting** — 100 requests/minute globally via `ThrottlerModule`.
+- **Rate limiting** — 100 requests/minute per client via `ThrottlerModule`, and 5/minute on
+  `POST /auth/login`. "Per client" depends on `TRUST_PROXY`: nginx appends the address it
+  saw to `X-Forwarded-For`, and the API trusts that many hops. It is **off by default** and
+  set to 1 only in `docker-compose.yml`, where nginx is the only way in. Trusting the header
+  with no proxy in front lets any client pick its own budget, and trusting more hops than
+  there are proxies does the same — api-e2e forges the header to prove neither happens.
 
 ### Database schema
 ```
@@ -260,7 +265,12 @@ IngestionRun (standalone — one collection run and its progress counters)
   if a third route is ever opened.
 - **Validation** — `class-validator` DTOs; the global `ValidationPipe` keeps
   `whitelist: true` and `forbidNonWhitelisted: true`.
-- **Security** — `helmet` stays active; CORS origins come from `FRONTEND_URL`.
+- **Security** — `helmet` stays active; CORS origins come from `FRONTEND_URL`. The HTML
+  document is nginx's: its `add_header` lines sit in `location /`, not on the server,
+  because `/api/` would inherit server-level ones and send them merged with helmet's. The
+  script policy is the `<meta>` CSP the client build writes (`security.autoCsp`), so an
+  inline script in `index.html` is allowed only through the build's hash — never by adding
+  `'unsafe-inline'` to the nginx header.
 
 ### Frontend — forbidden patterns
 - `@Input()` / `@Output()` / `@HostBinding` / `@HostListener` → use `input()`, `output()`,

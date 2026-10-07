@@ -18,12 +18,16 @@ import { SeedModule } from './seed/seed.module';
   imports: [
     ScheduleModule.forRoot(),
     ConfigModule.forRoot({ isGlobal: true }),
-    ThrottlerModule.forRoot([
-      {
-        ttl: 60000, // 1 minute
-        limit: 100, // 100 requests per minute
-      },
-    ]),
+    ThrottlerModule.forRoot({
+      throttlers: [
+        {
+          ttl: 60000, // 1 minute
+          limit: 100, // 100 requests per minute
+        },
+      ],
+      // The login form shows this as it stands.
+      errorMessage: 'Too many requests. Try again in a minute.',
+    }),
     PrismaModule,
     AuthModule,
     UsersModule,
