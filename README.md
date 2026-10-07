@@ -253,12 +253,14 @@ is itself the news.
 ## Tech notes
 
 - **Backend:** NestJS with a global `ValidationPipe` (`whitelist` +
-  `forbidNonWhitelisted`), `helmet`, env-driven CORS, `ThrottlerModule` (100 req/min),
-  and default-deny JWT auth. Secrets come from `ConfigService` — no hardcoded fallbacks, and
+  `forbidNonWhitelisted`), `helmet`, env-driven CORS, `ThrottlerModule` (100 req/min per
+  client, 5/min on login), and default-deny JWT auth. Secrets come from `ConfigService` — no hardcoded fallbacks, and
   `JwtModule.registerAsync` fails fast without `JWT_SECRET`.
 - **Frontend:** Angular with zoneless change detection, standalone components, native
   control flow (`@if` / `@for`), `inject()`, and state in root `signalStore`s
-  (`@ngrx/signals`). Tailwind with class-based dark mode; mobile-first.
+  (`@ngrx/signals`). Tailwind with class-based dark mode; mobile-first. The build hashes
+  the inline scripts into a strict CSP (`security.autoCsp`); nginx adds the rest of the
+  document's security headers.
 - **Type safety:** every project compiles with `strict`, including all eight libraries.
 - **Config:** all environment variables live in `.env` (see `.env.example`); a new one
   must be added to `docker-compose.yml` and `.env.example` in the same change.
