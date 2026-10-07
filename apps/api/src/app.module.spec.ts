@@ -60,20 +60,44 @@ class PublicProbeController {
   }
 }
 
+const prisma = {
+  user: { findUnique: jest.fn() },
+  // The seeder is off, but if it ever ran it would stop here rather than
+  // inventing a demo dataset inside a unit test.
+  city: { count: jest.fn().mockResolvedValue(1) },
+  area: { findMany: jest.fn().mockResolvedValue([]) },
+  // `IngestionService.onModuleInit` reaps expired leases and this is its only
+  // boot-time database call.
+  ingestionRun: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+};
+
+/**
+ * Boots the application as `bootstrap()` does. Each call is a separate app
+ * with its own throttler storage, so one describe cannot drain another's
+ * request budget.
+ */
+async function boot(): Promise<{ app: INestApplication; base: string }> {
+  const moduleRef = await Test.createTestingModule({
+    imports: [AppModule],
+    controllers: [ProbeController, PublicProbeController],
+  })
+    .overrideProvider(PrismaService)
+    .useValue(prisma)
+    .compile();
+
+  const app = moduleRef.createNestApplication();
+  configureApp(app);
+  // Port 0 for an ephemeral port: no collision with a running `nx serve api`
+  // or with a parallel jest worker. The port is read off the server because
+  // `app.getUrl()` answers `http://[::1]:PORT` on some hosts.
+  await app.listen(0, '127.0.0.1');
+  const { port } = app.getHttpServer().address() as AddressInfo;
+  return { app, base: `http://127.0.0.1:${port}` };
+}
+
 describe('AppModule — default-deny auth', () => {
   let app: INestApplication;
   let base: string;
-
-  const prisma = {
-    user: { findUnique: jest.fn() },
-    // The seeder is off, but if it ever ran it would stop here rather than
-    // inventing a demo dataset inside a unit test.
-    city: { count: jest.fn().mockResolvedValue(1) },
-    area: { findMany: jest.fn().mockResolvedValue([]) },
-    // `IngestionService.onModuleInit` reaps expired leases and this is its only
-    // boot-time database call.
-    ingestionRun: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
-  };
 
   const get = (path: string, token?: string) =>
     fetch(`${base}${path}`, {
@@ -97,22 +121,7 @@ describe('AppModule — default-deny auth', () => {
       password: hashed,
     });
 
-    const moduleRef = await Test.createTestingModule({
-      imports: [AppModule],
-      controllers: [ProbeController, PublicProbeController],
-    })
-      .overrideProvider(PrismaService)
-      .useValue(prisma)
-      .compile();
-
-    app = moduleRef.createNestApplication();
-    configureApp(app);
-    // Port 0 for an ephemeral port: no collision with a running `nx serve api`
-    // or with a parallel jest worker. The port is read off the server because
-    // `app.getUrl()` answers `http://[::1]:PORT` on some hosts.
-    await app.listen(0, '127.0.0.1');
-    const { port } = app.getHttpServer().address() as AddressInfo;
-    base = `http://127.0.0.1:${port}`;
+    ({ app, base } = await boot());
   });
 
   afterAll(async () => {
@@ -231,6 +240,81 @@ describe('AppModule — default-deny auth', () => {
 
     it('refuses a token it cannot verify', async () => {
       expect((await get('/cities', 'not-a-real-token')).status).toBe(401);
+    });
+  });
+});
+
+/**
+ * nginx is the only way into the stack, so every request reaches Nest from
+ * nginx's address. Unless the app trusts the hop nginx appends to
+ * `X-Forwarded-For`, the throttler sees one client: everyone shares a single
+ * budget, and one visitor can spend it for all of them.
+ *
+ * The test client plays nginx here, sending the header nginx would.
+ */
+describe('AppModule — throttling behind the proxy', () => {
+  // The global limit in `app.module.ts`.
+  const LIMIT = 100;
+
+  const from = (base: string, forwardedFor: string) =>
+    fetch(`${base}/config`, { headers: { 'X-Forwarded-For': forwardedFor } });
+
+  // One at a time: a hundred sockets at once is a load test, not this one.
+  const spend = async (base: string, forwardedFor: (i: number) => string) => {
+    for (let i = 0; i < LIMIT; i++) {
+      await from(base, forwardedFor(i));
+    }
+  };
+
+  describe('with TRUST_PROXY=1', () => {
+    let app: INestApplication;
+    let base: string;
+
+    beforeAll(async () => {
+      process.env.TRUST_PROXY = '1';
+      ({ app, base } = await boot());
+    });
+
+    afterAll(async () => {
+      delete process.env.TRUST_PROXY;
+      await app?.close();
+    });
+
+    it('gives each forwarded client its own budget', async () => {
+      await spend(base, () => '10.0.0.1');
+
+      expect((await from(base, '10.0.0.1')).status).toBe(429);
+      expect((await from(base, '10.0.0.2')).status).toBe(200);
+    });
+
+    // nginx appends the address it saw, so only the last entry is its word.
+    // Everything before it is whatever the client chose to send — keying on
+    // that would sell a fresh budget to anyone who asks for one.
+    it('keys on the hop the proxy appended, not on what the client claimed', async () => {
+      await spend(base, (i) => `198.51.100.${i}, 10.0.0.3`);
+
+      expect((await from(base, '203.0.113.7, 10.0.0.3')).status).toBe(429);
+    });
+  });
+
+  // `nx serve api` has no proxy in front of it, so there the header is the
+  // client's own claim and must be ignored.
+  describe('without TRUST_PROXY', () => {
+    let app: INestApplication;
+    let base: string;
+
+    beforeAll(async () => {
+      ({ app, base } = await boot());
+    });
+
+    afterAll(async () => {
+      await app?.close();
+    });
+
+    it('ignores X-Forwarded-For', async () => {
+      await spend(base, () => '10.0.0.4');
+
+      expect((await from(base, '10.0.0.5')).status).toBe(429);
     });
   });
 });
