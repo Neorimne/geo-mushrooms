@@ -2,6 +2,7 @@
  * @jest-environment node
  */
 import { Controller, Get, INestApplication, Req } from '@nestjs/common';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import { Request } from 'express';
 import { AddressInfo } from 'node:net';
@@ -85,7 +86,7 @@ async function boot(): Promise<{ app: INestApplication; base: string }> {
     .useValue(prisma)
     .compile();
 
-  const app = moduleRef.createNestApplication();
+  const app = moduleRef.createNestApplication<NestExpressApplication>();
   configureApp(app);
   // Port 0 for an ephemeral port: no collision with a running `nx serve api`
   // or with a parallel jest worker. The port is read off the server because
