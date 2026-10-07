@@ -296,6 +296,29 @@ describe('AppModule — throttling behind the proxy', () => {
 
       expect((await from(base, '203.0.113.7, 10.0.0.3')).status).toBe(429);
     });
+
+    const guess = (forwardedFor: string) =>
+      fetch(`${base}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': forwardedFor },
+        body: JSON.stringify({ email: ADMIN.email, password: 'wrong-password' }),
+      });
+
+    // The global budget suits browsing and is generous for guessing passwords.
+    it('stops a client after five login attempts a minute', async () => {
+      for (let i = 0; i < 5; i++) {
+        expect((await guess('10.0.1.1')).status).toBe(401);
+      }
+
+      const refused = await guess('10.0.1.1');
+      expect(refused.status).toBe(429);
+      // The login form shows the server's message as it stands.
+      expect(await refused.json()).toMatchObject({
+        message: 'Too many requests. Try again in a minute.',
+      });
+
+      expect((await guess('10.0.1.2')).status).toBe(401);
+    });
   });
 
   // `nx serve api` has no proxy in front of it, so there the header is the
