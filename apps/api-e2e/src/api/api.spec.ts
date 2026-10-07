@@ -128,3 +128,30 @@ describe('the HTML document', () => {
     expect(res.headers.get('x-frame-options')).toBe('SAMEORIGIN');
   });
 });
+
+/**
+ * Last on purpose: it spends this host's login budget for a minute, and the
+ * seeded-login case above would fail after it. A local re-run inside that
+ * minute fails the same way.
+ */
+describe('the login limit, through nginx', () => {
+  // Every attempt claims a new address. nginx appends the one it saw and the
+  // API trusts only that hop, so no claim buys a fresh budget. Six attempts
+  // run out the five allowed even if nothing above had spent any.
+  it('cannot be reset by a forged X-Forwarded-For', async () => {
+    const statuses: number[] = [];
+    for (let i = 0; i < 6; i++) {
+      const res = await fetch(`${apiBaseUrl()}/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Forwarded-For': `198.51.100.${i}`,
+        },
+        body: JSON.stringify({ email: 'nobody@example.com', password: 'wrong-password' }),
+      });
+      statuses.push(res.status);
+    }
+
+    expect(statuses.at(-1)).toBe(429);
+  });
+});
