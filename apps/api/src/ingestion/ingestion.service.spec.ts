@@ -11,10 +11,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import {
   INGESTION_STATUS,
   INGESTION_TRIGGER,
-  MONTH_REQUEST_DELAY_MS,
   RUN_HEARTBEAT_MS,
   RUN_LEASE_MS,
-  RATE_LIMIT_BACKOFF_MS,
   REQUEST_DELAY_MS,
 } from './ingestion.constants';
 import {
@@ -278,6 +276,18 @@ describe('IngestionService', () => {
     jest.useRealTimers();
   });
 
+  /**
+   * Runs the fake clock until the run in flight is over, however its pauses
+   * add up. Advancing a computed amount instead ties a test to the schedule:
+   * one millisecond short and the last timer never fires, so `whenIdle()`
+   * waits out jest's timeout rather than failing on an assertion. Tests about
+   * pacing advance exact amounts on purpose, and check both sides.
+   */
+  const finishRun = async () => {
+    await jest.runAllTimersAsync();
+    await service.whenIdle();
+  };
+
   describe('Collection runs', () => {
     it('records a run and closes it once every city is done', async () => {
       jest.useFakeTimers();
@@ -292,8 +302,7 @@ describe('IngestionService', () => {
       expect(run.totalCities).toBe(2);
 
       // The pause between cities is the only thing keeping the run open.
-      await jest.advanceTimersByTimeAsync(REQUEST_DELAY_MS);
-      await service.whenIdle();
+      await finishRun();
 
       expect(runs[0]).toMatchObject({
         status: INGESTION_STATUS.COMPLETED,
@@ -319,8 +328,7 @@ describe('IngestionService', () => {
       ]);
 
       await service.startFullRun();
-      await jest.advanceTimersByTimeAsync(REQUEST_DELAY_MS);
-      await service.whenIdle();
+      await finishRun();
 
       expect(runs[0]).toMatchObject({
         status: INGESTION_STATUS.COMPLETED,
@@ -339,8 +347,7 @@ describe('IngestionService', () => {
       ]);
 
       await service.startFullRun();
-      await jest.advanceTimersByTimeAsync(REQUEST_DELAY_MS);
-      await service.whenIdle();
+      await finishRun();
 
       expect(runs[0]).toMatchObject({
         status: INGESTION_STATUS.COMPLETED,
@@ -378,8 +385,7 @@ describe('IngestionService', () => {
         ConflictException,
       );
 
-      await jest.advanceTimersByTimeAsync(REQUEST_DELAY_MS);
-      await service.whenIdle();
+      await finishRun();
 
       // …and is allowed again once the first one is over.
       await expect(service.startCityRun(3)).resolves.toMatchObject({
@@ -423,8 +429,7 @@ describe('IngestionService', () => {
       // RUNNING, whatever the callers did.
       expect(runs.filter((r) => r.status === INGESTION_STATUS.RUNNING)).toHaveLength(1);
 
-      await jest.advanceTimersByTimeAsync(REQUEST_DELAY_MS);
-      await service.whenIdle();
+      await finishRun();
     });
 
     it('rejects a run for a city that does not exist', async () => {
@@ -451,8 +456,7 @@ describe('IngestionService', () => {
         status: INGESTION_STATUS.RUNNING,
       });
 
-      await jest.advanceTimersByTimeAsync(REQUEST_DELAY_MS);
-      await service.whenIdle();
+      await finishRun();
 
       expect(await service.getActiveRun()).toBeNull();
       expect(await service.getLatestRun()).toMatchObject({
@@ -614,8 +618,7 @@ describe('IngestionService', () => {
       prismaService.dailyObservation.count.mockResolvedValue(0);
 
       await service.startCityRun(1);
-      await jest.advanceTimersByTimeAsync(MONTH_REQUEST_DELAY_MS);
-      await service.whenIdle();
+      await finishRun();
 
       expect(archive.fetchMonth.mock.calls.map((call) => call[2])).toEqual([
         '2026-08-01',
@@ -694,10 +697,7 @@ describe('IngestionService', () => {
       expect(run.trigger).toBe(INGESTION_TRIGGER.MANUAL_BACKFILL);
       expect(run.scopeLabel).toContain('2026');
 
-      await jest.advanceTimersByTimeAsync(
-        REQUEST_DELAY_MS + 10 * MONTH_REQUEST_DELAY_MS,
-      );
-      await service.whenIdle();
+      await finishRun();
 
       expect(runs[0]).toMatchObject({
         status: INGESTION_STATUS.COMPLETED,
@@ -735,8 +735,7 @@ describe('IngestionService', () => {
       );
 
       await service.startBackfillRun();
-      await jest.advanceTimersByTimeAsync(10 * MONTH_REQUEST_DELAY_MS);
-      await service.whenIdle();
+      await finishRun();
 
       // April (30 stored days) never hits the network but still counts as done.
       expect(archive.fetchMonth.mock.calls.map((c) => c[2])).not.toContain(
@@ -775,8 +774,7 @@ describe('IngestionService', () => {
       prismaService.dailyObservation.count.mockResolvedValue(31);
 
       await service.startBackfillRun();
-      await jest.advanceTimersByTimeAsync(10 * MONTH_REQUEST_DELAY_MS);
-      await service.whenIdle();
+      await finishRun();
 
       expect(archive.fetchMonth.mock.calls.map((c) => c[2])).toEqual([
         '2026-08-01',
@@ -789,8 +787,7 @@ describe('IngestionService', () => {
       const run = await service.startCityRun(9, INGESTION_TRIGGER.CITY_CREATED);
 
       expect(run.totalCities).toBe(5);
-      await jest.advanceTimersByTimeAsync(5 * MONTH_REQUEST_DELAY_MS);
-      await service.whenIdle();
+      await finishRun();
       expect(archive.fetchMonth).toHaveBeenCalledTimes(5);
     });
 
@@ -804,8 +801,7 @@ describe('IngestionService', () => {
       );
 
       await service.startBackfillRun();
-      await jest.advanceTimersByTimeAsync(10 * MONTH_REQUEST_DELAY_MS);
-      await service.whenIdle();
+      await finishRun();
 
       expect(runs[0]).toMatchObject({
         status: INGESTION_STATUS.COMPLETED,
@@ -849,8 +845,7 @@ describe('IngestionService', () => {
       ]);
 
       await service.startFullRun();
-      await jest.advanceTimersByTimeAsync(REQUEST_DELAY_MS);
-      await service.whenIdle();
+      await finishRun();
 
       // Both cities already carry an id, so one handshake covers the whole run.
       expect(archive.openSession).toHaveBeenCalledTimes(1);
@@ -870,8 +865,7 @@ describe('IngestionService', () => {
       archive.resolveLocality.mockResolvedValue(null);
 
       await service.startFullRun();
-      await jest.advanceTimersByTimeAsync(2 * REQUEST_DELAY_MS);
-      await service.whenIdle();
+      await finishRun();
 
       expect(runs[0]).toMatchObject({
         status: INGESTION_STATUS.COMPLETED,
@@ -890,8 +884,7 @@ describe('IngestionService', () => {
       archive.resolveLocality.mockRejectedValue(new Error('502 from the source'));
 
       await service.startFullRun();
-      await jest.advanceTimersByTimeAsync(2 * REQUEST_DELAY_MS);
-      await service.whenIdle();
+      await finishRun();
 
       expect(runs[0]).toMatchObject({
         status: INGESTION_STATUS.COMPLETED,
@@ -912,8 +905,7 @@ describe('IngestionService', () => {
       );
 
       await service.startFullRun();
-      await jest.advanceTimersByTimeAsync(REQUEST_DELAY_MS);
-      await service.whenIdle();
+      await finishRun();
 
       expect(runs[0].status).toBe(INGESTION_STATUS.FAILED);
       expect(runs[0].errorMessage).toContain('can no longer be read');
@@ -931,8 +923,7 @@ describe('IngestionService', () => {
       prismaService.city.update.mockRejectedValue(new Error('connection reset'));
 
       await service.startFullRun();
-      await jest.advanceTimersByTimeAsync(2 * REQUEST_DELAY_MS);
-      await service.whenIdle();
+      await finishRun();
 
       expect(runs[0]).toMatchObject({
         status: INGESTION_STATUS.COMPLETED,
@@ -963,8 +954,7 @@ describe('IngestionService', () => {
       await jest.advanceTimersByTimeAsync(1);
       expect(archive.openSession).toHaveBeenCalledTimes(2);
 
-      await jest.advanceTimersByTimeAsync(2 * REQUEST_DELAY_MS);
-      await service.whenIdle();
+      await finishRun();
       expect(runs[0]).toMatchObject({ processed: 1, failed: 1 });
     });
 
@@ -1003,8 +993,7 @@ describe('IngestionService', () => {
       );
 
       await service.startFullRun();
-      await jest.advanceTimersByTimeAsync(REQUEST_DELAY_MS);
-      await service.whenIdle();
+      await finishRun();
 
       expect(runs[0].status).toBe(INGESTION_STATUS.FAILED);
       expect(archive.openSession).toHaveBeenCalledTimes(1);
@@ -1024,8 +1013,7 @@ describe('IngestionService', () => {
         .mockResolvedValue(monthDays('2026-08-01'));
 
       await service.startFullRun();
-      await jest.advanceTimersByTimeAsync(RATE_LIMIT_BACKOFF_MS);
-      await service.whenIdle();
+      await finishRun();
 
       expect(archive.fetchMonth).toHaveBeenCalledTimes(2);
       expect(runs[0]).toMatchObject({
@@ -1044,8 +1032,7 @@ describe('IngestionService', () => {
       archive.fetchMonth.mockRejectedValue(new RateLimitError('429'));
 
       await service.startFullRun();
-      await jest.advanceTimersByTimeAsync(RATE_LIMIT_BACKOFF_MS);
-      await service.whenIdle();
+      await finishRun();
 
       expect(runs[0].status).toBe(INGESTION_STATUS.FAILED);
       expect(runs[0].errorMessage).toContain('rate-limited');
@@ -1064,10 +1051,7 @@ describe('IngestionService', () => {
         .mockRejectedValue(new RateLimitError('429'));
 
       await service.startFullRun();
-      await jest.advanceTimersByTimeAsync(
-        REQUEST_DELAY_MS + RATE_LIMIT_BACKOFF_MS,
-      );
-      await service.whenIdle();
+      await finishRun();
 
       expect(runs[0].status).toBe(INGESTION_STATUS.FAILED);
       expect(prismaService.dailyObservation.upsert).toHaveBeenCalledTimes(1);
