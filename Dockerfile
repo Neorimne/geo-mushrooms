@@ -26,8 +26,8 @@ FROM node:22-alpine AS backend
 
 WORKDIR /app
 
-# OpenSSL, which Prisma needs on Alpine
-RUN apk add --no-cache openssl
+# OpenSSL, which Prisma needs on Alpine; tini, so node is not PID 1 (below)
+RUN apk add --no-cache openssl tini
 
 # package.json, for the runtime install
 COPY package*.json ./
@@ -49,8 +49,16 @@ COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
 EXPOSE 3000
 
-# Apply migrations against the schema copied to ./prisma, then start the server
-CMD npx prisma migrate deploy --schema=./prisma/schema.prisma && node dist/main.js
+# Everything above stays root-owned: the server only reads it.
+USER node
+
+# The kernel ignores a signal to PID 1 that has no handler. Nest re-raises
+# SIGTERM once it has shut down, so as PID 1 node would outlive its own exit.
+ENTRYPOINT ["/sbin/tini", "--"]
+
+# Apply migrations against the schema copied to ./prisma, then start the server.
+# `exec` hands the shell's process to node, so SIGTERM reaches the server.
+CMD ["sh", "-c", "npx prisma migrate deploy --schema=./prisma/schema.prisma && exec node dist/main.js"]
 
 # --- STAGE 3: FRONTEND RUNNER (Nginx) ---
 FROM nginx:alpine AS frontend
