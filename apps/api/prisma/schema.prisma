@@ -156,7 +156,8 @@ model IngestionRun {
   // Who is collecting for this run, and when they last said so. The process
   // that starts a run stamps its own id and refreshes `heartbeatAt` while the
   // loop is alive, so a restart can tell a run whose process died from one
-  // another instance is still working on. See RUN_LEASE_MS.
+  // another instance is still working on. See RUN_LEASE_MS. A process that is
+  // stopped releases its run and clears `ownerId`, so nothing owns it after.
   ownerId     String?
   heartbeatAt DateTime?
 
