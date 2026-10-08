@@ -127,6 +127,7 @@ const SESSION: ArchiveSession = { providerId: 'test' };
 const MID_MONTH = new Date('2026-08-20T09:00:00.000Z');
 
 describe('IngestionService', () => {
+  let moduleRef: TestingModule;
   let service: IngestionService;
   let runs: RunRow[];
   let prismaService: {
@@ -261,7 +262,7 @@ describe('IngestionService', () => {
       fetchMonth: jest.fn().mockResolvedValue(monthDays('2026-08-01')),
     };
 
-    const module: TestingModule = await Test.createTestingModule({
+    moduleRef = await Test.createTestingModule({
       providers: [
         IngestionService,
         { provide: PrismaService, useValue: prismaService },
@@ -269,7 +270,7 @@ describe('IngestionService', () => {
       ],
     }).compile();
 
-    service = module.get<IngestionService>(IngestionService);
+    service = moduleRef.get<IngestionService>(IngestionService);
   });
 
   afterEach(() => {
@@ -562,6 +563,70 @@ describe('IngestionService', () => {
       // Untouched: a live lease is somebody else's work, not a stale lock.
       expect(runs[0].status).toBe(INGESTION_STATUS.RUNNING);
       expect(runs[0].errorMessage).toBeNull();
+    });
+  });
+
+  // A deploy stops the process mid-run. Left to the lease, the run stays
+  // RUNNING: the next process boots inside RUN_LEASE_MS and rightly skips it,
+  // and nothing looks again until someone wants the lock. `close()` is the
+  // lifecycle Nest runs on SIGTERM.
+  describe('Shutdown', () => {
+    it('releases the run in flight instead of leaving it to the lease', async () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(MID_MONTH);
+      prismaService.city.findMany.mockResolvedValue([
+        city(1, 'Alpha'),
+        city(2, 'Beta'),
+      ]);
+
+      await service.startFullRun();
+      // Into the pause between the two cities.
+      await jest.advanceTimersByTimeAsync(REQUEST_DELAY_MS / 2);
+      expect(runs[0].processed).toBe(1);
+
+      await moduleRef.close();
+
+      expect(runs[0]).toMatchObject({
+        status: INGESTION_STATUS.FAILED,
+        errorMessage: 'Interrupted by a server shutdown',
+        currentCity: null,
+        ownerId: null,
+      });
+      expect(runs[0].finishedAt).not.toBeNull();
+      expect(await service.getActiveRun()).toBeNull();
+
+      // The loop lives until the process exits. With no owner on the row, its
+      // owner-pinned writes match nothing, so it cannot report COMPLETED.
+      await finishRun();
+
+      expect(runs[0]).toMatchObject({
+        status: INGESTION_STATUS.FAILED,
+        processed: 1,
+        failed: 0,
+      });
+    });
+
+    it("leaves another process's run alone", async () => {
+      runs.push({
+        id: 1,
+        trigger: 'CRON',
+        status: INGESTION_STATUS.RUNNING,
+        scopeLabel: 'All cities',
+        totalCities: 5,
+        processed: 2,
+        failed: 0,
+        currentCity: 'Beta',
+        errorMessage: null,
+        startedAt: new Date(),
+        finishedAt: null,
+        ownerId: 'a-peer-process',
+        heartbeatAt: new Date(),
+      });
+
+      await moduleRef.close();
+
+      expect(runs[0].status).toBe(INGESTION_STATUS.RUNNING);
+      expect(runs[0].ownerId).toBe('a-peer-process');
     });
   });
 
