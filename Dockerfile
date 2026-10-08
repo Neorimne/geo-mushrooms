@@ -59,9 +59,8 @@ FROM nginx:alpine AS frontend
 COPY --from=builder /app/dist/apps/client/browser /usr/share/nginx/html
 
 # The Nginx config
-# COPY nginx/nginx.conf /etc/nginx/conf.d/default.conf
+COPY nginx/nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
-EXPOSE 443
 
 CMD ["nginx", "-g", "daemon off;"]
