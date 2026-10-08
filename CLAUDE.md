@@ -33,7 +33,7 @@ All commands run from the workspace root. Use `npx nx` as the task runner.
 > npm is a separate pin: `node:22-alpine` still ships **npm 10.9**, and
 > `package-lock.json` is an npm 11 artifact, so npm 10 builds a different tree from it and
 > fails `npm ci` with a misleading "lockfile out of sync" error naming packages that have
-> nothing to do with the problem. The `Dockerfile` and both `ci.yml` jobs run
+> nothing to do with the problem. The `Dockerfile` and every `ci.yml` job run
 > `npm install -g npm@11` before `npm ci`; any new environment must do the same.
 >
 > **Never regenerate `package-lock.json` — update it.** A lockfile rebuilt on Windows
@@ -68,6 +68,9 @@ npx prisma studio --schema=./apps/api/prisma/schema.prisma
 docker compose up -d                    # the whole stack, seeded
 docker compose down -v                  # nuclear reset (deletes data, reseeds on next up)
 ```
+
+`nginx/nginx.conf` is baked into the frontend image, not mounted, so the stack job tests
+the image as built. After editing it, rebuild: `docker compose up -d --build frontend`.
 
 ## Architecture
 
@@ -178,6 +181,11 @@ same goes for words: the client starts a *collection run*; nothing here scrapes.
   startup and never look again, leaving the lock held by an owner that no longer exists.
   **Every write to a run is pinned to its owner** (`updateMany` on `{ id, ownerId }`): a
   reaped run must not be able to report itself `COMPLETED` afterwards.
+  A process that is *stopped* doesn't wait for the lease: `beforeApplicationShutdown`
+  marks its run `FAILED` and clears `ownerId`, so the next process can start a run at once
+  and the old loop's writes match nothing. Shutdown hooks are on in `configureApp`, and
+  the image runs node under tini so SIGTERM reaches it. `scripts/check-graceful-shutdown.sh`
+  checks this on the live stack in CI.
 - **`SeedService`** — writes the demo dataset when `SEED_DEMO_DATA=true` *and* the database
   has no cities. Fail-closed, and never touches a database that already has data.
 - **Rate limiting** — 100 requests/minute per client via `ThrottlerModule`, and 5/minute on

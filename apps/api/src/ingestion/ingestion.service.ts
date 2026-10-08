@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  BeforeApplicationShutdown,
   ConflictException,
   Inject,
   Injectable,
@@ -69,11 +70,16 @@ const MONTHS_SHORT = [
 ];
 
 @Injectable()
-export class IngestionService implements OnModuleInit {
+export class IngestionService
+  implements OnModuleInit, BeforeApplicationShutdown
+{
   private readonly logger = new Logger(IngestionService.name);
 
   /** The loop of the run currently in flight, so callers can await a run they only started. */
   private inFlight: Promise<void> | null = null;
+
+  /** The id of that run, so shutdown can release it. */
+  private activeRunId: number | null = null;
 
   /**
    * Identifies this process in the runs it owns. Generated per boot, never
@@ -144,6 +150,40 @@ export class IngestionService implements OnModuleInit {
     });
 
     return count;
+  }
+
+  /**
+   * Gives up the run in flight when the process is told to stop.
+   *
+   * Left to the lease, a deploy mid-run leaves the run RUNNING: the next
+   * process boots inside `RUN_LEASE_MS`, rightly skips it, and nothing looks
+   * again until somebody wants the lock.
+   *
+   * Clearing `ownerId` is what makes the release stick. The loop is not
+   * awaited — it may be inside a pause far longer than a stop timeout — and
+   * runs on until the process exits, but every write it makes is pinned to
+   * its owner and now matches nothing.
+   */
+  async beforeApplicationShutdown() {
+    const runId = this.activeRunId;
+    if (runId === null) return;
+
+    this.stopHeartbeat();
+    await this.prisma.ingestionRun
+      .updateMany({
+        where: { id: runId, ownerId: this.ownerId },
+        data: {
+          status: INGESTION_STATUS.FAILED,
+          errorMessage: 'Interrupted by a server shutdown',
+          currentCity: null,
+          finishedAt: new Date(),
+          ownerId: null,
+        },
+      })
+      .then(() => this.logger.warn(`Run #${runId} released on shutdown`))
+      .catch((e) =>
+        this.logger.error(`Could not release run #${runId} on shutdown:`, e),
+      );
   }
 
   @Cron(CronExpression.EVERY_DAY_AT_10AM)
@@ -461,9 +501,11 @@ export class IngestionService implements OnModuleInit {
     );
 
     this.startHeartbeat(run.id);
+    this.activeRunId = run.id;
     this.inFlight = this.executeRun(run.id, plans).finally(() => {
       this.stopHeartbeat();
       this.inFlight = null;
+      this.activeRunId = null;
     });
 
     return run;

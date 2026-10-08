@@ -102,6 +102,10 @@ jobs:
 
       - run: npx nx e2e api-e2e
 
+      # Last, because it stops the backend.
+      - name: Graceful shutdown
+        run: bash scripts/check-graceful-shutdown.sh
+
       - name: Stack logs
         if: ${{ failure() }}
         run: docker compose logs

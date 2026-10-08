@@ -10,6 +10,9 @@ import helmet from 'helmet';
 export function configureApp(app: NestExpressApplication): void {
   const config = app.get(ConfigService);
 
+  // Runs the shutdown hooks on SIGTERM, which is how `docker stop` asks.
+  app.enableShutdownHooks();
+
   // The client's address, for the throttler, is read from X-Forwarded-For only
   // across the number of proxy hops named here. Off unless set: with no proxy
   // in front, the header is the client's own claim, and trusting it would let
