@@ -12,4 +12,7 @@ module.exports = {
   ],
   // html for the CI artifact; text-summary so the numbers show in the log.
   coverageReporters: ['html', 'text-summary'],
+  // No threshold here: projects range from 3% to 100% branch coverage, so any
+  // shared floor would mean nothing. Each jest.config.cts sets its own, just
+  // under what it measured. Raise it when coverage rises; never lower it to pass.
 };

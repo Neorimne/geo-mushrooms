@@ -3,6 +3,9 @@ module.exports = {
   preset: '../../jest.preset.js',
   setupFilesAfterEnv: ['<rootDir>/src/test-setup.ts'],
   coverageDirectory: '../../coverage/apps/client',
+  coverageThreshold: {
+    global: { statements: 21, branches: 98, functions: 7, lines: 21 },
+  },
   transform: {
     '^.+\\.(ts|mjs|js|html)$': [
       'jest-preset-angular',
