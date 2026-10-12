@@ -13,6 +13,13 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Nx 23 keeps its task cache and the database indexing it in ~/.nx/<hash>/,
+# outside the checkout. Setting either variable keeps both in the checkout,
+# where actions/cache below saves them.
+env:
+  NX_CACHE_DIRECTORY: .nx/cache
+  NX_WORKSPACE_DATA_DIRECTORY: .nx/workspace-data
+
 jobs:
   verify:
     name: Lint, test, build
@@ -39,10 +46,9 @@ jobs:
       - name: Generate Prisma client
         run: npx prisma generate --schema=./apps/api/prisma/schema.prisma
 
-      # Nx's task cache is the artifacts in .nx/cache plus their index, a
-      # database in .nx/workspace-data. Restoring one without the other gets no
-      # hits. Every run saves under its own SHA and restores the newest prefix
-      # match; Nx re-hashes each task's inputs, so a stale entry is a miss.
+      # The artifacts and their index travel together; one without the other
+      # gets no hits. Every run saves under its own SHA and restores the newest
+      # prefix match; Nx re-hashes each task's inputs, so a stale entry is a miss.
       - uses: actions/cache@v4
         with:
           path: |
