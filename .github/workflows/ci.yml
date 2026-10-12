@@ -39,7 +39,30 @@ jobs:
       - name: Generate Prisma client
         run: npx prisma generate --schema=./apps/api/prisma/schema.prisma
 
-      - run: npx nx run-many -t lint test build
+      # Nx's task cache is the artifacts in .nx/cache plus their index, a
+      # database in .nx/workspace-data. Restoring one without the other gets no
+      # hits. Every run saves under its own SHA and restores the newest prefix
+      # match; Nx re-hashes each task's inputs, so a stale entry is a miss.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            .nx/cache
+            .nx/workspace-data
+          key: nx-verify-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
+          restore-keys: nx-verify-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+
+      - run: npx nx run-many -t lint build
+
+      # The `ci` configuration (nx.json) is what turns coverage on. A separate
+      # step, because `-c ci` would otherwise apply to lint and build as well.
+      - run: npx nx run-many -t test -c ci
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: coverage
+          path: coverage
+          retention-days: 7
 
   e2e:
     name: Playwright E2E
@@ -63,6 +86,15 @@ jobs:
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
+
+      # Same scheme as the verify job; its own key, because it runs other tasks.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            .nx/cache
+            .nx/workspace-data
+          key: nx-e2e-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
+          restore-keys: nx-e2e-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
 
       # The suite is hermetic — route interception stands in for the API, so no
       # database or backend is needed here.
