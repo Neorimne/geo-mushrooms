@@ -51,6 +51,7 @@ npx nx serve client       # Angular frontend (http://localhost:4200)
 ```sh
 npx nx run-many -t test                 # unit tests, all projects
 npx nx test <project>                   # e.g. api, ui-chart, catalog-data-access
+npx nx run-many -t test -c ci           # with coverage and each project's floor, as CI runs it
 npx nx e2e client-e2e                   # Playwright, hermetic
 npx nx e2e api-e2e                      # smoke test against the compose stack (API_BASE_URL)
 npx nx run-many -t lint
@@ -241,6 +242,11 @@ IngestionRun (standalone — one collection run and its progress counters)
 - **Nx boundaries** — `apps/` cannot import from each other; circular dependencies are
   forbidden.
 - Every project compiles with `strict`, libraries included.
+- **Coverage floors are per project**, in each `jest.config.cts`, just under what it
+  measured. Raise one when coverage rises; never lower it to pass. Coverage counts every
+  source file (`collectCoverageFrom` in `jest.preset.js`), not only those a spec loads.
+  A project with no specs is never checked at all, because jest skips the threshold when
+  no test runs.
 
 ### Backend
 - Never use `process.env` directly — inject `ConfigService`. For module options needing

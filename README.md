@@ -199,6 +199,7 @@ npx nx serve client                                       # http://localhost:420
 | Build (prod) | `npx nx run api:build:production` · `npx nx run client:build:production` |
 | Unit tests (all) | `npx nx run-many -t test` |
 | Unit tests (one) | `npx nx test <project>` (e.g. `api`, `ui-chart`) |
+| Unit tests + coverage | `npx nx run-many -t test -c ci` |
 | E2E | `npx nx e2e client-e2e` |
 | Lint | `npx nx run-many -t lint` |
 | Dependency graph | `npx nx graph` |
@@ -220,8 +221,9 @@ npx prisma studio --schema=./apps/api/prisma/schema.prisma
 ### CI
 
 `.github/workflows/ci.yml` runs three jobs on every pull request and on every push to
-`master`: `nx run-many -t lint test build`, the Playwright suite, and a stack smoke test.
-The Playwright suite is hermetic — route interception stands in for the API. The stack job
+`master`: lint, unit tests and build, the Playwright suite, and a stack smoke test.
+The unit tests run with coverage, and every project has a floor just under what it
+measured, set in its own `jest.config.cts`. The Playwright suite is hermetic — route interception stands in for the API. The stack job
 is the opposite: it runs `cp .env.example .env && docker compose up`, exactly as above, and
 then `apps/api-e2e` against it through nginx, so migrations, the seed and the image are
 verified on every change.
