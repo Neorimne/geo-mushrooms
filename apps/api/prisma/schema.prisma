@@ -109,6 +109,9 @@ model DailyObservation {
   note Note?
 
   @@unique([cityId, date])
+  // getLastUpdate reads the newest fetchedAt on every list load; without this
+  // it sorts the largest table to return one value.
+  @@index([fetchedAt])
   @@map("daily_observations")
 }
 
