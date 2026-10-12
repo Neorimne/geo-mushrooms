@@ -32,10 +32,6 @@
         "{workspaceRoot}/tools/eslint-rules/**/*"
       ]
     },
-    "@angular/build:unit-test": {
-      "cache": true,
-      "inputs": ["default", "^production"]
-    },
     "test": [
       {
         "filter": {
@@ -84,6 +80,7 @@
       },
       "include": [
         "apps/api/**/*",
+        "apps/client/**/*",
         "libs/auth/data-access/**/*",
         "libs/auth/feature-login/**/*",
         "libs/catalog/data-access/**/*",
@@ -111,7 +108,7 @@
       "e2eTestRunner": "playwright",
       "linter": "eslint",
       "style": "scss",
-      "unitTestRunner": "vitest-angular"
+      "unitTestRunner": "jest"
     },
     "@nx/angular:library": {
       "linter": "eslint",
